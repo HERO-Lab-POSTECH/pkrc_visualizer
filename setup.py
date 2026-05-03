@@ -10,8 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        # launch 파일은 Task 4 Step 5에서 작성하면서 이 줄을 추가:
-        # ('share/' + package_name + '/launch', ['launch/pkrc_visualizer.launch.py']),
+        ('share/' + package_name + '/launch', ['launch/pkrc_visualizer.launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
