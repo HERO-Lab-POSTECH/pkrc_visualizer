@@ -27,6 +27,7 @@ class DrawerMenu(QFrame):
 
         self._animation = QPropertyAnimation(self, b"geometry")
         self._animation.setDuration(180)
+        self._animation.finished.connect(self._on_close_done)
         self._open = False
         self.hide()
 
@@ -49,15 +50,11 @@ class DrawerMenu(QFrame):
         self._animation.setStartValue(QRect(0, 0, self.DRAWER_WIDTH, parent_height))
         self._animation.setEndValue(QRect(-self.DRAWER_WIDTH, 0, self.DRAWER_WIDTH, parent_height))
         self._animation.start()
-        self._animation.finished.connect(self._on_close_done)
         self._open = False
 
     def _on_close_done(self) -> None:
-        try:
-            self._animation.finished.disconnect(self._on_close_done)
-        except TypeError:
-            pass
-        self.hide()
+        if not self._open:  # close 애니메이션 완료 시에만 hide
+            self.hide()
 
     def select(self, index: int) -> None:
         self._list.setCurrentRow(index)

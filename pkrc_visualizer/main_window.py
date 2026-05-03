@@ -1,5 +1,5 @@
 """햄버거 메뉴 + DrawerMenu + QStackedWidget을 담는 메인 윈도우."""
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtCore import QSize
 from PyQt5.QtWidgets import (QMainWindow, QPushButton, QStackedWidget, QStatusBar,
                              QVBoxLayout, QWidget)
 
