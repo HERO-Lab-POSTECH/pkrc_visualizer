@@ -35,6 +35,7 @@ class RosClient(QObject):
         self._executor_thread.start()
 
     def _subscribe(self, spec: TopicSpec) -> None:
+        assert self._node is not None, "RosClient.start()가 먼저 호출되어야 합니다."
         qos = QoSProfile(depth=10)
         if spec.qos_best_effort:
             qos.reliability = ReliabilityPolicy.BEST_EFFORT
@@ -50,6 +51,7 @@ class RosClient(QObject):
         self.message_received.emit(topic_id, msg)
 
     def _spin_loop(self) -> None:
+        assert self._node is not None
         while not self._stop_event.is_set():
             try:
                 rclpy.spin_once(self._node, timeout_sec=0.1)
