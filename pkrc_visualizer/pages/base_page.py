@@ -1,5 +1,4 @@
 """모든 페이지의 공통 상위. show/hide 시 timer 제어 + RosClient 시그널 연결."""
-from typing import Callable
 
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import QWidget
