@@ -1,5 +1,4 @@
 """pyvistaqt.QtInteractor 임베드. 점군 + Marker 갱신 인터페이스."""
-from typing import Optional
 
 import numpy as np
 import pyvista as pv
