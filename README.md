@@ -35,4 +35,24 @@ ros2 run pkrc_visualizer pkrc_viz
 
 ## Architecture
 
+- 단일 프로세스 — Qt 메인 스레드(UI) + rclpy 별도 스레드(spin) + `pyqtSignal` queued connection.
+- 활성 페이지만 10 Hz `QTimer`로 렌더 (비활성 페이지는 timer stop).
+- 모든 토픽은 시작 시 한꺼번에 구독, 페이지 전환은 즉시.
+
 설계 문서: `/workspace/docs/superpowers/specs/2026-05-03-pkrc-visualizer-design.md`
+
+## Test
+
+```bash
+cd /workspace/ros2_ws/src/pkrc_visualizer
+xvfb-run -a python3 -m pytest test/ -v
+```
+
+(헤드리스 환경에서는 PyVistaView OpenGL 컨텍스트 위해 xvfb-run 필요)
+
+## Known limitations
+
+- 점군 100k 이상에서 frame rate 저하 가능 — 다운샘플 미구현.
+- Sonoptix 토픽 이름은 운용 환경마다 다름 → `pkrc_visualizer/topic_config.py`에서 수정.
+- LaserScan(Ping360) 표시는 prototype에서 polar 미사용 (이미지 탭만).
+- 메시지가 한 번도 안 들어온 토픽은 status bar에 라벨이 안 만들어짐 (실제 발행 시점부터 표시 시작).
