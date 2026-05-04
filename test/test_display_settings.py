@@ -2,10 +2,12 @@
 from pathlib import Path
 
 import pytest
+from PyQt5.QtTest import QSignalSpy
 
 from pkrc_visualizer.display_settings import (
-    CloudSettings, FramesSettings, PageDisplaySettings,
-    load_yaml, save_yaml,
+    CloudSettings, DisplaySettingsStore, FramesSettings,
+    ImageLayoutSettings, ImagePanelSettings, PageDisplaySettings,
+    load_yaml, save_yaml, settings_from_dict,
 )
 
 
@@ -73,12 +75,6 @@ def test_unknown_yaml_keys_dropped(tmp_path: Path):
     assert loaded["slam"].cloud.size == 7.0
 
 
-import pytest
-from PyQt5.QtTest import QSignalSpy
-
-from pkrc_visualizer.display_settings import DisplaySettingsStore, load_yaml
-
-
 def test_store_get_returns_default(tmp_path, qtbot):
     store = DisplaySettingsStore(path=tmp_path / "s.yaml")
     s = store.get("slam")
@@ -126,11 +122,6 @@ def test_store_unknown_path_raises(tmp_path, qtbot):
         store.update("slam", "cloud.nope", 1)
 
 
-from pkrc_visualizer.display_settings import (
-    ImageLayoutSettings, ImagePanelSettings,
-)
-
-
 def test_image_layout_defaults():
     s = ImageLayoutSettings()
     assert s.layout == "2x2"
@@ -158,3 +149,31 @@ def test_image_layout_yaml_roundtrip(tmp_path: Path):
     assert len(loaded["image"].image.panels) == 2
     assert loaded["image"].image.panels[0].topic_name == "/cam/raw"
     assert loaded["image"].image.panels[1].msg_type == "CompressedImage"
+
+
+def test_image_dict_non_dict_falls_back_to_defaults():
+    # YAML written as `image: bad_string` (or any non-dict) must not crash.
+    s = settings_from_dict({"image": "bad_string"})
+    assert s.image == ImageLayoutSettings()
+
+
+def test_image_panels_non_dict_entries_skipped():
+    # Forward-compat: future versions may emit non-dict entries — drop them.
+    s = settings_from_dict({
+        "image": {
+            "layout": "2x2",
+            "panels": [
+                {"topic_name": "/a", "msg_type": "Image"},
+                "not_a_dict",
+                42,
+                {"topic_name": "/b", "msg_type": "CompressedImage"},
+            ],
+        },
+    })
+    assert [p.topic_name for p in s.image.panels] == ["/a", "/b"]
+
+
+def test_image_key_absent_returns_default_image_layout():
+    s = settings_from_dict({"frames": {"map_axes_length_m": 2.0}})
+    assert s.image == ImageLayoutSettings()
+    assert s.frames.map_axes_length_m == 2.0  # 다른 필드는 정상 처리

@@ -79,11 +79,15 @@ def settings_from_dict(d: dict[str, Any]) -> PageDisplaySettings:
     frames = FramesSettings(**_filter_known(FramesSettings, d.get("frames", {})))
     cloud = CloudSettings(**_filter_known(CloudSettings, d.get("cloud", {})))
     image_dict = d.get("image", {})
-    raw_panels = image_dict.get("panels", []) if isinstance(image_dict, dict) else []
+    if not isinstance(image_dict, dict):
+        image_dict = {}
+    raw_panels = image_dict.get("panels", [])
     panels = [
         ImagePanelSettings(**_filter_known(ImagePanelSettings, p))
         for p in raw_panels if isinstance(p, dict)
     ]
+    # _filter_known leaves the raw `panels` list in place; immediately
+    # override it with the dataclass-converted list above.
     image = ImageLayoutSettings(
         **{
             **_filter_known(ImageLayoutSettings, image_dict),
