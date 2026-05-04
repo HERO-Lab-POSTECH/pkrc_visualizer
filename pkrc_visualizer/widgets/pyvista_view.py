@@ -138,6 +138,13 @@ class PyVistaView(QWidget):
             render_points_as_spheres=False)
         self._accum_points = np.zeros((0, 3), dtype=np.float32)
 
+        # Cloud color config: (transformer, flat_color, color_min, color_max).
+        # Read by _set_actor_points to attach the right scalar to fresh polydata.
+        self._cloud_color_config = ("flat", "#4fc3f7", 0.0, 10.0)
+        self._jet_lut = self._make_jet_lut()
+        # Instance-level FIFO cap so apply_display_settings can shrink it at runtime.
+        self.max_accum_points = self.MAX_ACCUM_POINTS
+
         # Persistent vtkCubeAxesActor — bounds updated in place (no flicker).
         cube_axes = vtk.vtkCubeAxesActor()
         cube_axes.SetCamera(self._plotter.camera)
@@ -169,14 +176,17 @@ class PyVistaView(QWidget):
         self._last_grid_update = 0.0
         self._cur_grid_bounds = (-1.0, 1.0, -1.0, 1.0, -1.0, 1.0)
 
-    @staticmethod
-    def _set_actor_points(actor, points, keepalive_dict):
+    def _set_actor_points(self, actor, points, keepalive_dict):
         """Re-attach a new PolyData to the actor's mapper.
 
-        Storing the PolyData in `keepalive_dict` prevents Python GC from
-        invalidating the data the mapper still references.
+        Stores the polydata in `keepalive_dict` to keep it alive for the
+        VTK mapper. When the cloud color transformer is "z", attaches the
+        z coordinate as a scalar so the jet LUT can colour it.
         """
         polydata = pv.PolyData(points.astype(np.float32))
+        transformer, _, _, _ = self._cloud_color_config
+        if transformer == "z" and points.size:
+            polydata["scalar"] = points[:, 2].astype(np.float32)
         actor.GetMapper().SetInputData(polydata)
         actor.GetMapper().Update()
         keepalive_dict[id(actor)] = polydata
@@ -225,8 +235,8 @@ class PyVistaView(QWidget):
             return
         new_pts = points.astype(np.float32)
         combined = np.vstack([self._accum_points, new_pts])
-        if combined.shape[0] > self.MAX_ACCUM_POINTS:
-            combined = combined[-self.MAX_ACCUM_POINTS:]
+        if combined.shape[0] > self.max_accum_points:
+            combined = combined[-self.max_accum_points:]
         self._accum_points = combined
         self._set_actor_points(self._accum_actor, combined, self._polydata_keepalive)
         self._accum_actor.GetProperty().SetColor(*pv.Color(color).float_rgb)
@@ -252,6 +262,79 @@ class PyVistaView(QWidget):
 
     def reset_camera(self):
         self._plotter.reset_camera()
+
+    @staticmethod
+    def _hex_to_rgb01(color_hex: str) -> tuple[float, float, float]:
+        h = color_hex.lstrip("#")
+        return tuple(int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+
+    @staticmethod
+    def _make_jet_lut():
+        lut = vtk.vtkLookupTable()
+        lut.SetHueRange(0.667, 0.0)   # blue → red
+        lut.SetSaturationRange(1.0, 1.0)
+        lut.SetValueRange(1.0, 1.0)
+        lut.SetNumberOfTableValues(256)
+        lut.Build()
+        return lut
+
+    def apply_display_settings(self, settings) -> None:
+        self._plotter.set_background(settings.background)
+        self._apply_frames(settings.frames)
+        self._apply_cloud(settings.cloud)
+        self._plotter.render()
+
+    def _apply_frames(self, f) -> None:
+        for axes, length, width in (
+            (self._origin_axes, f.map_axes_length_m, f.map_axes_line_width),
+            (self._robot_axes, f.robot_axes_length_m, f.robot_axes_line_width),
+        ):
+            axes.SetTotalLength(length, length, length)
+            for shaft in (axes.GetXAxisShaftProperty(),
+                          axes.GetYAxisShaftProperty(),
+                          axes.GetZAxisShaftProperty()):
+                shaft.SetLineWidth(width)
+
+        self._origin_axes.SetVisibility(f.show_map_frame)
+        self._origin_label.SetVisibility(f.show_map_frame)
+        if not f.show_robot_frame:
+            self._robot_axes.SetVisibility(False)
+            self._robot_label.SetVisibility(False)
+
+        for label, color in (
+            (self._origin_label, f.map_label_color),
+            (self._robot_label, f.robot_label_color),
+        ):
+            prop = label.GetTextProperty()
+            prop.SetFontSize(f.label_font_size)
+            prop.SetColor(*self._hex_to_rgb01(color))
+
+    def _apply_cloud(self, c) -> None:
+        self._cloud_color_config = (
+            c.color_transformer, c.flat_color, c.color_min, c.color_max,
+        )
+        self.max_accum_points = c.decay_max_points
+        if self._accum_points.shape[0] > self.max_accum_points:
+            self._accum_points = self._accum_points[-self.max_accum_points:]
+            self._set_actor_points(
+                self._accum_actor, self._accum_points, self._polydata_keepalive)
+
+        for actor in (self._cloud_actor, self._accum_actor):
+            prop = actor.GetProperty()
+            prop.SetPointSize(c.size)
+            prop.SetOpacity(c.alpha)
+            prop.SetRenderPointsAsSpheres(c.style == "spheres")
+            mapper = actor.GetMapper()
+            if c.color_transformer == "flat":
+                prop.SetColor(*self._hex_to_rgb01(c.flat_color))
+                mapper.ScalarVisibilityOff()
+            else:
+                mapper.ScalarVisibilityOn()
+                mapper.SetScalarRange(c.color_min, c.color_max)
+                mapper.SetLookupTable(self._jet_lut)
+        if self._accum_points.size:
+            self._set_actor_points(
+                self._accum_actor, self._accum_points, self._polydata_keepalive)
 
     def closeEvent(self, event):
         self._plotter.close()
