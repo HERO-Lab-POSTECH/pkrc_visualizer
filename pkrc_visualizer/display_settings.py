@@ -49,7 +49,7 @@ class ImagePanelSettings:
 class ImageLayoutSettings:
     layout: str = "2x2"               # "1x1" | "2x1" | "2x2" | "3x2" | "free"
     panels: list[ImagePanelSettings] = field(default_factory=list)
-    splitter_state: str = ""          # base64 of QSplitter.saveState() bytes; "" = no restore
+    splitter_state: str = ""          # serialized splitter sizes ("outer_csv; row0_csv; row1_csv"); "" = no restore
 
 
 @dataclass

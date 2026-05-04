@@ -143,6 +143,54 @@ def test_splitter_state_restored_on_page_rebuild(qtbot, tmp_path):
     )
 
 
+def test_2x2_layout_persists_inner_row_sizes(qtbot, tmp_path):
+    page = _make_page(qtbot, tmp_path)
+    page.resize(1800, 900)
+    page._toolbar.set_layout_value("2x2")
+    for _ in range(4):
+        page._add_panel()
+    qtbot.wait(60)
+
+    # Drag outer (vertical) divider and one inner (horizontal) divider.
+    page._splitter.setSizes([300, 600])
+    inner_row = page._splitter.widget(0)
+    assert isinstance(inner_row, QSplitter)
+    inner_row.setSizes([400, 1400])
+    page._capture_splitter_state()
+    qtbot.wait(120)
+
+    state = page._store.get("image").image.splitter_state
+    # State must encode outer + at least one inner row.
+    assert ";" in state, f"Expected nested encoding, got: {state!r}"
+    parts = state.split(";")
+    assert len(parts) >= 2  # outer + at least row0
+
+
+def test_show_after_hide_does_not_overwrite_user_drag(qtbot, tmp_path):
+    page = _make_page(qtbot, tmp_path)
+    page.resize(1800, 600)
+    page._toolbar.set_layout_value("2x1")
+    page._add_panel()
+    page._add_panel()
+    page.show()
+    qtbot.waitExposed(page)
+
+    page._splitter.setSizes([400, 1200])
+    page._capture_splitter_state()
+    qtbot.wait(120)
+
+    # User drags AFTER initial restore.
+    page._splitter.setSizes([1200, 400])
+    page.hide()
+    page.show()
+    qtbot.waitExposed(page)
+    qtbot.wait(60)
+    sizes = page._splitter.sizes()
+    # If restore re-fired, sizes would have been overwritten back to [400,1200].
+    # Allow some Qt geometry slack but verify the user's drag direction is preserved.
+    assert sizes[0] > sizes[1], f"hide/show overwrote drag; sizes={sizes}"
+
+
 def test_splitter_state_dropped_on_layout_change(qtbot, tmp_path):
     page = _make_page(qtbot, tmp_path)
     page._toolbar.set_layout_value("2x1")

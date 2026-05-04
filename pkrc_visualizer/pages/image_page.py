@@ -30,6 +30,7 @@ class ImagePage(BasePage):
         self._panel_topic_ids: dict[ImagePanel, Optional[str]] = {}
         self._topic_pool: list[str] = []
 
+        self._splitter_restored: bool = False
         self._build_ui()
         self._wire_signals()
         ros_client.enable_discovery([Image, CompressedImage])
@@ -56,7 +57,9 @@ class ImagePage(BasePage):
         # Restore splitter positions after layout has been finalized.
         # setSizes() must run after the splitter is visible so the container
         # has assigned a real size to it; doing it here is reliable.
-        self._restore_splitter_state()
+        # Guard against re-firing on hide/show cycles overwriting user drags.
+        if self._splitter is not None and not self._splitter_restored:
+            self._restore_splitter_state()
 
     def _wire_signals(self) -> None:
         self._toolbar.add_viewer_clicked.connect(self._add_panel)
@@ -188,6 +191,7 @@ class ImagePage(BasePage):
                 self._splitter.addWidget(row)
         self._container_layout.addWidget(self._splitter)
         self._wire_splitter_signals(self._splitter)
+        self._splitter_restored = False
         self._restore_splitter_state()
 
     def _wire_splitter_signals(self, splitter: QSplitter) -> None:
@@ -201,12 +205,13 @@ class ImagePage(BasePage):
     def _capture_splitter_state(self) -> None:
         if self._splitter is None:
             return
-        # Store sizes as a comma-joined string so that _restore_splitter_state
-        # can call setSizes() which is reliable across show/resize cycles.
-        # We also keep a base64 saveState() copy for future use, but the
-        # primary restore path reads the sizes list.
-        sizes = self._splitter.sizes()
-        state = ",".join(str(s) for s in sizes)
+        parts = [",".join(str(s) for s in self._splitter.sizes())]
+        if self._splitter.orientation() == Qt.Vertical:
+            for i in range(self._splitter.count()):
+                child = self._splitter.widget(i)
+                if isinstance(child, QSplitter):
+                    parts.append(",".join(str(s) for s in child.sizes()))
+        state = ";".join(parts)
         layout = self._store.get(PAGE_KEY).image
         new_layout = ImageLayoutSettings(
             layout=layout.layout,
@@ -214,6 +219,8 @@ class ImagePage(BasePage):
             splitter_state=state,
         )
         self._store.update(PAGE_KEY, "image", new_layout)
+        # Mark as restored so showEvent hide/show cycle won't overwrite user drags.
+        self._splitter_restored = True
 
     def _restore_splitter_state(self) -> None:
         if self._splitter is None:
@@ -221,13 +228,31 @@ class ImagePage(BasePage):
         state_str = self._store.get(PAGE_KEY).image.splitter_state
         if not state_str:
             return
+        groups = state_str.split(";")
+        applied = False
+        outer_sizes = self._parse_sizes(groups[0])
+        if outer_sizes and len(outer_sizes) == self._splitter.count():
+            self._splitter.setSizes(outer_sizes)
+            applied = True
+        if self._splitter.orientation() == Qt.Vertical and len(groups) > 1:
+            for i, raw in enumerate(groups[1:]):
+                if i >= self._splitter.count():
+                    break
+                child = self._splitter.widget(i)
+                if isinstance(child, QSplitter):
+                    sizes = self._parse_sizes(raw)
+                    if sizes and len(sizes) == child.count():
+                        child.setSizes(sizes)
+                        applied = True
+        if applied:
+            self._splitter_restored = True
+
+    @staticmethod
+    def _parse_sizes(raw: str) -> list[int]:
         try:
-            sizes = [int(s) for s in state_str.split(",")]
-        except (ValueError, AttributeError):
-            return
-        if len(sizes) != self._splitter.count():
-            return
-        self._splitter.setSizes(sizes)
+            return [int(s) for s in raw.split(",") if s.strip()]
+        except ValueError:
+            return []
 
     def _persist(self) -> None:
         panels = []
