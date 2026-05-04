@@ -1,6 +1,6 @@
 """Tests for the schema declarations driving SettingsPanel."""
 from pkrc_visualizer.widgets.settings_schema import (
-    FieldSpec, background_schema, cloud_schema, frames_schema, panel_tabs,
+    background_schema, cloud_schema, frames_schema, panel_tabs,
 )
 
 
@@ -43,7 +43,7 @@ def test_panel_tabs_returns_three_groups():
 
 from PyQt5.QtCore import QRect
 from PyQt5.QtTest import QSignalSpy
-from PyQt5.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QSpinBox, QWidget
+from PyQt5.QtWidgets import QWidget
 
 from pkrc_visualizer.widgets.settings_panel import SettingsPanel
 from pkrc_visualizer.display_settings import PageDisplaySettings

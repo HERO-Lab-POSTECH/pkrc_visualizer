@@ -1,7 +1,9 @@
 """Schema-driven settings panel that overlays a parent QWidget bottom-left."""
 from typing import Any
 
-from PyQt5.QtCore import QPropertyAnimation, QRect, Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import (
+    QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer, pyqtSignal,
+)
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QCheckBox, QColorDialog, QComboBox, QDoubleSpinBox, QFormLayout, QFrame,
@@ -77,6 +79,7 @@ class SettingsPanel(QFrame):
         self._tab_id_list: list[str] = [tid for tid, _, _ in tabs]
         self._anim = QPropertyAnimation(self, b"geometry")
         self._anim.setDuration(ANIMATION_MS)
+        self._anim.setEasingCurve(QEasingCurve.OutCubic)
         self._build_ui(tabs)
 
     # ---- public API -------------------------------------------------
@@ -128,7 +131,7 @@ class SettingsPanel(QFrame):
         self.reset_requested.emit(self._tab_id_list[idx])
 
     def _make_widget(self, spec: FieldSpec) -> QWidget:
-        if spec.widget == "slider":
+        if spec.widget in ("slider", "spinbox_float"):
             w = QDoubleSpinBox()
             w.setRange(spec.options["min"], spec.options["max"])
             w.setSingleStep(spec.options.get("step", 0.1))
@@ -141,13 +144,6 @@ class SettingsPanel(QFrame):
             w.setSingleStep(int(spec.options.get("step", 1)))
             w.valueChanged.connect(
                 lambda v, p=spec.path: self._emit(p, int(v)))
-            return w
-        if spec.widget == "spinbox_float":
-            w = QDoubleSpinBox()
-            w.setRange(spec.options["min"], spec.options["max"])
-            w.setSingleStep(spec.options.get("step", 0.1))
-            w.valueChanged.connect(
-                lambda v, p=spec.path: self._emit(p, float(v)))
             return w
         if spec.widget == "color":
             w = _ColorButton("#000000")
@@ -208,7 +204,9 @@ class SettingsPanel(QFrame):
     def _show_at(self, anchor_rect: QRect) -> None:
         parent_rect = self.parent().rect()
         target_w = PANEL_WIDTH
-        target_h = min(PANEL_MAX_HEIGHT, parent_rect.height() - 16)
+        target_h = max(0, min(PANEL_MAX_HEIGHT, parent_rect.height() - 16))
+        if target_h == 0:
+            return
         x = anchor_rect.x()
         y = max(8, anchor_rect.y() - target_h - 4)
         self.setGeometry(x, anchor_rect.y(), target_w, 0)
