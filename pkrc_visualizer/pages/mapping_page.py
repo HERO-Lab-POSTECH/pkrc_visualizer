@@ -17,7 +17,7 @@ class MappingPage(BasePage):
         self._has_set_camera = False
 
     def _is_my_topic(self, topic_id: str) -> bool:
-        return topic_id in {"map_cloud", "map_markers"}
+        return topic_id in {"map_cloud", "map_markers", "pose_odom"}
 
     def refresh(self) -> None:
         cloud_msg = self._latest.pop("map_cloud", None)
@@ -32,6 +32,12 @@ class MappingPage(BasePage):
         if marker_msg is not None:
             pts = self._markers_to_array(marker_msg)
             self._view.update_markers(pts, color="#ffb74d")
+
+        odom_msg = self._latest.get("pose_odom")
+        if odom_msg is not None:
+            p = odom_msg.pose.pose.position
+            q = odom_msg.pose.pose.orientation
+            self._view.update_robot_pose((p.x, p.y, p.z), (q.x, q.y, q.z, q.w))
 
     @staticmethod
     def _cloud_to_array(msg) -> np.ndarray:
