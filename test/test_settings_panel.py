@@ -110,3 +110,38 @@ def test_toggle_shows_and_hides(qtbot):
     qtbot.waitUntil(lambda: panel.isVisible(), timeout=500)
     panel.toggle(QRect(8, 560, 32, 32))
     qtbot.waitUntil(lambda: not panel.isVisible(), timeout=500)
+
+
+from pkrc_visualizer.widgets.settings_button import SettingsButton
+
+
+def test_settings_button_anchors_bottom_left(qtbot):
+    parent = QWidget()
+    parent.resize(800, 600)
+    qtbot.addWidget(parent)
+    btn = SettingsButton(parent)
+    parent.show()
+    qtbot.waitExposed(parent)
+    assert btn.x() == 8                 # MARGIN_LEFT
+    assert btn.y() == 600 - 32 - 8      # height - BUTTON_SIZE - MARGIN_BOTTOM
+
+
+def test_settings_button_repositions_on_parent_resize(qtbot):
+    parent = QWidget()
+    parent.resize(800, 600)
+    qtbot.addWidget(parent)
+    btn = SettingsButton(parent)
+    parent.show()
+    qtbot.waitExposed(parent)
+    parent.resize(1000, 400)
+    qtbot.wait(50)
+    assert btn.y() == 400 - 32 - 8
+
+
+def test_settings_button_emits_clicked(qtbot):
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    btn = SettingsButton(parent)
+    spy = QSignalSpy(btn.clicked)
+    btn.click()
+    assert len(spy) == 1
