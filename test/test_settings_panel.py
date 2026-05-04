@@ -20,12 +20,15 @@ def test_cloud_schema_with_decay():
     paths = {f.path for f in cloud_schema(include_decay=True)}
     assert "cloud.decay_seconds" in paths
     assert "cloud.style" in paths
+    assert "cloud.size_unit" in paths
     assert "cloud.color_transformer" in paths
 
 
 def test_cloud_schema_without_decay():
     paths = {f.path for f in cloud_schema(include_decay=False)}
     assert "cloud.decay_seconds" not in paths
+    # size_unit stays in even when decay is disabled.
+    assert "cloud.size_unit" in paths
 
 
 def test_background_schema():
@@ -59,15 +62,16 @@ def _make_panel(qtbot, include_decay=True):
 
 def test_panel_builds_widget_per_field(qtbot):
     _, panel = _make_panel(qtbot, include_decay=True)
-    # frames(9) + cloud(8 with decay) + background(1)
-    assert len(panel._widgets) == 18
-    assert "cloud.decay_seconds" in panel._widgets
+    # frames(9) + cloud(9 with decay+size_unit) + background(1)
+    assert len(panel._widgets) == 19
+    assert "cloud.size_unit" in panel._widgets
 
 
 def test_panel_omits_decay_when_disabled(qtbot):
     _, panel = _make_panel(qtbot, include_decay=False)
     assert "cloud.decay_seconds" not in panel._widgets
-    assert len(panel._widgets) == 17
+    assert "cloud.size_unit" in panel._widgets
+    assert len(panel._widgets) == 18
 
 
 def test_apply_values_syncs_widget_state(qtbot):
