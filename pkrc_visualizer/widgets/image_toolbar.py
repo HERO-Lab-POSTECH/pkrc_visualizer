@@ -29,6 +29,4 @@ class ImageToolbar(QWidget):
 
     def set_layout_value(self, value: str) -> None:
         if value in LAYOUT_OPTIONS:
-            self._layout_combo.blockSignals(True)
             self._layout_combo.setCurrentText(value)
-            self._layout_combo.blockSignals(False)

@@ -2,7 +2,9 @@
 from PyQt5.QtCore import Qt, pyqtSignal, QObject
 from PyQt5.QtWidgets import QSplitter
 
-from pkrc_visualizer.display_settings import DisplaySettingsStore
+from pkrc_visualizer.display_settings import (
+    DisplaySettingsStore, ImageLayoutSettings, ImagePanelSettings, PageDisplaySettings,
+)
 from pkrc_visualizer.pages.image_page import ImagePage
 
 
@@ -90,3 +92,69 @@ def test_3x2_layout_two_rows_three_columns(qtbot, tmp_path):
         assert isinstance(row, QSplitter)
         assert row.orientation() == Qt.Horizontal
         assert row.count() == 3
+
+
+def test_splitter_state_persists_to_store_on_resize(qtbot, tmp_path):
+    page = _make_page(qtbot, tmp_path)
+    page._toolbar.set_layout_value("2x1")
+    page._add_panel()
+    page._add_panel()
+    qtbot.wait(60)  # debounce flush
+
+    # Simulate user-driven splitter movement by writing sizes directly.
+    page._splitter.setSizes([200, 600])
+    page._capture_splitter_state()
+    qtbot.wait(120)
+    snap = page._store.get("image")
+    assert snap.image.splitter_state != ""
+
+
+def test_splitter_state_restored_on_page_rebuild(qtbot, tmp_path):
+    # Pre-seed the store with a strongly asymmetric splitter state.
+    # The state string format is "size0,size1,..." matching _capture_splitter_state.
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=50)
+    # Make the page wide enough so both panels can satisfy their minimumSizeHint
+    # (330 px each) while still leaving room for a clear asymmetry.
+    # 400 vs 1200 → ratio ≈ 0.25; both are well above the 330-px minimum.
+    state_str = "400,1200"
+
+    store._pages["image"] = PageDisplaySettings(
+        image=ImageLayoutSettings(
+            layout="2x1",
+            panels=[ImagePanelSettings(), ImagePanelSettings()],
+            splitter_state=state_str,
+        ),
+    )
+
+    ros = FakeRosClient()
+    page = ImagePage(ros, store)
+    # Make the page wide enough for the stored sizes to be respected.
+    page.resize(1800, 600)
+    qtbot.addWidget(page)
+    page.show()
+    qtbot.wait(60)
+    assert page._splitter is not None
+    sizes = page._splitter.sizes()
+    total = sum(sizes) or 1
+    ratio = sizes[0] / total
+    # The first panel must be clearly smaller than the second (ratio < 0.4).
+    assert ratio < 0.4, (
+        f"Expected asymmetric split (ratio<0.4), got {ratio:.2f} from sizes {sizes}"
+    )
+
+
+def test_splitter_state_dropped_on_layout_change(qtbot, tmp_path):
+    page = _make_page(qtbot, tmp_path)
+    page._toolbar.set_layout_value("2x1")
+    page._add_panel()
+    page._add_panel()
+    page._splitter.setSizes([100, 700])
+    page._capture_splitter_state()
+    qtbot.wait(120)
+    assert page._store.get("image").image.splitter_state != ""
+
+    # Change layout — old state must be cleared (its byte shape is
+    # incompatible with the new splitter tree).
+    page._toolbar.set_layout_value("2x2")
+    qtbot.wait(120)
+    assert page._store.get("image").image.splitter_state == ""

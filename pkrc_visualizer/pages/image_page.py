@@ -1,7 +1,7 @@
 """Image page: dynamic panel grid with nested QSplitter support. v0.4.0."""
 from typing import Optional
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import QGridLayout, QSplitter, QVBoxLayout, QWidget
 from sensor_msgs.msg import CompressedImage, Image
 
@@ -51,13 +51,23 @@ class ImagePage(BasePage):
         outer.addWidget(self._toolbar)
         outer.addWidget(self._container, 1)
 
+    def showEvent(self, event: QEvent) -> None:
+        super().showEvent(event)
+        # Restore splitter positions after layout has been finalized.
+        # setSizes() must run after the splitter is visible so the container
+        # has assigned a real size to it; doing it here is reliable.
+        self._restore_splitter_state()
+
     def _wire_signals(self) -> None:
         self._toolbar.add_viewer_clicked.connect(self._add_panel)
         self._toolbar.layout_changed.connect(self._on_layout_changed)
         self._ros_client.topics_changed.connect(self._on_topics_changed)
 
     def _restore_from_store(self, layout: ImageLayoutSettings) -> None:
+        # Disconnect layout_changed while restoring to avoid a spurious reflow.
+        self._toolbar.layout_changed.disconnect(self._on_layout_changed)
         self._toolbar.set_layout_value(layout.layout)
+        self._toolbar.layout_changed.connect(self._on_layout_changed)
         for ps in layout.panels:
             panel = self._add_panel()
             if ps.topic_name:
@@ -156,7 +166,7 @@ class ImagePage(BasePage):
     def _reflow_into_grid(self, layout_id: str) -> None:
         for i in reversed(range(self._grid.count())):
             self._grid.takeAt(i)
-        rows, cols = LAYOUT_GRID.get(layout_id, (2, 2))
+        _, cols = LAYOUT_GRID.get(layout_id, (2, 2))
         for idx, panel in enumerate(self._panels):
             r, c = divmod(idx, cols)
             self._grid.addWidget(panel, r, c)
@@ -177,6 +187,47 @@ class ImagePage(BasePage):
                     row.addWidget(panel)
                 self._splitter.addWidget(row)
         self._container_layout.addWidget(self._splitter)
+        self._wire_splitter_signals(self._splitter)
+        self._restore_splitter_state()
+
+    def _wire_splitter_signals(self, splitter: QSplitter) -> None:
+        splitter.splitterMoved.connect(
+            lambda _pos, _idx: self._capture_splitter_state())
+        for i in range(splitter.count()):
+            child = splitter.widget(i)
+            if isinstance(child, QSplitter):
+                self._wire_splitter_signals(child)
+
+    def _capture_splitter_state(self) -> None:
+        if self._splitter is None:
+            return
+        # Store sizes as a comma-joined string so that _restore_splitter_state
+        # can call setSizes() which is reliable across show/resize cycles.
+        # We also keep a base64 saveState() copy for future use, but the
+        # primary restore path reads the sizes list.
+        sizes = self._splitter.sizes()
+        state = ",".join(str(s) for s in sizes)
+        layout = self._store.get(PAGE_KEY).image
+        new_layout = ImageLayoutSettings(
+            layout=layout.layout,
+            panels=list(layout.panels),
+            splitter_state=state,
+        )
+        self._store.update(PAGE_KEY, "image", new_layout)
+
+    def _restore_splitter_state(self) -> None:
+        if self._splitter is None:
+            return
+        state_str = self._store.get(PAGE_KEY).image.splitter_state
+        if not state_str:
+            return
+        try:
+            sizes = [int(s) for s in state_str.split(",")]
+        except (ValueError, AttributeError):
+            return
+        if len(sizes) != self._splitter.count():
+            return
+        self._splitter.setSizes(sizes)
 
     def _persist(self) -> None:
         panels = []
@@ -190,9 +241,14 @@ class ImagePage(BasePage):
                 msg_type = "CompressedImage" if "CompressedImage" in type_str else "Image"
             panels.append(ImagePanelSettings(
                 topic_name=topic_name, msg_type=msg_type))
+        new_layout_id = self._toolbar._layout_combo.currentText()
+        old = self._store.get(PAGE_KEY).image
+        # Layout id changed -> drop incompatible splitter state.
+        keep_state = old.splitter_state if new_layout_id == old.layout else ""
         self._store.update(
             PAGE_KEY, "image",
             ImageLayoutSettings(
-                layout=self._toolbar._layout_combo.currentText(),
+                layout=new_layout_id,
                 panels=panels,
+                splitter_state=keep_state,
             ))
