@@ -85,3 +85,39 @@ def test_discover_diff_emits_only_on_change(qtbot):
     })
     assert len(spy) == 1
     assert spy[0]["/b"] == "sensor_msgs/msg/CompressedImage"
+
+
+def test_subscribe_dynamic_returns_unique_topic_id():
+    client = RosClient([])
+    # _node가 None이어도 ID 발급 자체는 가능해야 함 (등록은 start 후)
+    tid1 = client._make_topic_id("/cam/raw")
+    tid2 = client._make_topic_id("/cam/raw")
+    assert tid1 != tid2
+    assert tid1.startswith("dyn_")
+
+
+def test_subscribe_dynamic_ref_counts(monkeypatch):
+    """동일 토픽을 두 번 구독하면 실제 create_subscription은 한 번만 호출."""
+    client = RosClient([])
+
+    class FakeNode:
+        def __init__(self):
+            self.created = []
+
+        def create_subscription(self, msg_type, name, cb, qos):
+            sub = ("sub", name, msg_type, cb, qos)
+            self.created.append(sub)
+            return sub
+
+        def destroy_subscription(self, sub):
+            self.created.remove(sub)
+
+    fake = FakeNode()
+    client._node = fake  # type: ignore
+    tid1 = client.subscribe_dynamic("/cam/raw", ImageMsg)
+    tid2 = client.subscribe_dynamic("/cam/raw", ImageMsg)
+    assert len(fake.created) == 1   # 한 번만 실제 구독
+    client.unsubscribe(tid1)
+    assert len(fake.created) == 1   # 아직 ref > 0
+    client.unsubscribe(tid2)
+    assert len(fake.created) == 0   # 마지막 ref 해지 → destroy

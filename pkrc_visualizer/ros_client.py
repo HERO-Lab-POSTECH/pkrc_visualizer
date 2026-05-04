@@ -30,6 +30,10 @@ class RosClient(QObject):
         self._known_topics: dict[str, str] = {}
         self._discover_msg_types: list[type] = []
         self._discover_timer: Optional[QTimer] = None
+        self._dynamic_subs: dict[str, tuple[Any, int]] = {}
+        # topic_name → (subscription_handle, ref_count)
+        self._tid_to_topic: dict[str, str] = {}
+        self._tid_seq = 0
 
     def start(self) -> None:
         if not rclpy.ok():
@@ -114,6 +118,50 @@ class RosClient(QObject):
     def latest(self, topic_id: str) -> Optional[Any]:
         with self._cache_lock:
             return self._cache.get(topic_id)
+
+    def _make_topic_id(self, topic_name: str) -> str:
+        self._tid_seq += 1
+        sanitized = topic_name.strip("/").replace("/", "_") or "root"
+        return f"dyn_{self._tid_seq}_{sanitized}"
+
+    def subscribe_dynamic(self, topic_name: str, msg_type: type) -> str:
+        """동적 구독. 동일 topic_name 반복 호출은 ref count 증가만."""
+        topic_id = self._make_topic_id(topic_name)
+        if topic_name in self._dynamic_subs:
+            sub, count = self._dynamic_subs[topic_name]
+            self._dynamic_subs[topic_name] = (sub, count + 1)
+        else:
+            assert self._node is not None, "RosClient.start() must precede subscribe_dynamic()"
+            qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+            sub = self._node.create_subscription(
+                msg_type, topic_name,
+                lambda msg, name=topic_name: self._on_dynamic_msg(name, msg),
+                qos,
+            )
+            self._dynamic_subs[topic_name] = (sub, 1)
+        self._tid_to_topic[topic_id] = topic_name
+        return topic_id
+
+    def unsubscribe(self, topic_id: str) -> None:
+        topic_name = self._tid_to_topic.pop(topic_id, None)
+        if topic_name is None:
+            return
+        sub, count = self._dynamic_subs.get(topic_name, (None, 0))
+        if sub is None:
+            return
+        if count <= 1:
+            self._node.destroy_subscription(sub)  # type: ignore
+            self._dynamic_subs.pop(topic_name, None)
+        else:
+            self._dynamic_subs[topic_name] = (sub, count - 1)
+
+    def _on_dynamic_msg(self, topic_name: str, msg: Any) -> None:
+        """동적 구독이 받은 메시지를 활성 topic_id 모두에게 fan-out."""
+        for tid, name in self._tid_to_topic.items():
+            if name == topic_name:
+                with self._cache_lock:
+                    self._cache[tid] = msg
+                self.message_received.emit(tid, msg)
 
     def stop(self) -> None:
         self._stop_event.set()
