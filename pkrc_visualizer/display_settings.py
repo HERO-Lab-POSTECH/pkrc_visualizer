@@ -47,8 +47,9 @@ class ImagePanelSettings:
 
 @dataclass
 class ImageLayoutSettings:
-    layout: str = "2x2"      # "1x1" | "2x1" | "2x2" | "3x2" | "free"
+    layout: str = "2x2"               # "1x1" | "2x1" | "2x2" | "3x2" | "free"
     panels: list[ImagePanelSettings] = field(default_factory=list)
+    splitter_state: str = ""          # base64 of QSplitter.saveState() bytes; "" = no restore
 
 
 @dataclass

@@ -230,3 +230,23 @@ def test_cloud_size_unit_unknown_value_passes_through():
     # other than "meters" as "pixels" (Task 6). Codec must not coerce.
     s = settings_from_dict({"cloud": {"size_unit": "weird"}})
     assert s.cloud.size_unit == "weird"
+
+
+def test_image_splitter_state_default():
+    s = ImageLayoutSettings()
+    assert s.splitter_state == ""
+
+
+def test_image_splitter_state_yaml_roundtrip(tmp_path: Path):
+    path = tmp_path / "settings.yaml"
+    pages = {
+        "image": PageDisplaySettings(
+            image=ImageLayoutSettings(
+                layout="2x2",
+                splitter_state="AAABAAAA...==",
+            ),
+        ),
+    }
+    save_yaml(path, pages)
+    loaded = load_yaml(path)
+    assert loaded["image"].image.splitter_state == "AAABAAAA...=="
