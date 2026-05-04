@@ -15,7 +15,7 @@ class TopicHzStatusBar(QStatusBar):
         self._ros_client = ros_client
         self._timestamps: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=200))
         self._labels: dict[str, QLabel] = {}
-        self._page_label = QLabel("페이지: —")
+        self._page_label = QLabel("Page: —")
         self.addWidget(self._page_label)
 
         ros_client.message_received.connect(self._on_msg, type=Qt.QueuedConnection)

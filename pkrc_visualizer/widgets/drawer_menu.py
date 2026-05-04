@@ -57,4 +57,8 @@ class DrawerMenu(QFrame):
             self.hide()
 
     def select(self, index: int) -> None:
+        # Initial selection must not trigger itemClicked (which would emit a
+        # close_drawer animation while the drawer is hidden).
+        self._list.blockSignals(True)
         self._list.setCurrentRow(index)
+        self._list.blockSignals(False)
