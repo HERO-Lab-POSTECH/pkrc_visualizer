@@ -297,9 +297,12 @@ class PyVistaView(QWidget):
 
         self._origin_axes.SetVisibility(f.show_map_frame)
         self._origin_label.SetVisibility(f.show_map_frame)
-        if not f.show_robot_frame:
-            self._robot_axes.SetVisibility(False)
-            self._robot_label.SetVisibility(False)
+        # Robot triad starts hidden until update_robot_pose flips it on.
+        # Once visible, honour the user toggle in both directions; if hidden
+        # because no odom arrived yet, leave it hidden (toggle has no effect).
+        if bool(self._robot_axes.GetVisibility()) or not f.show_robot_frame:
+            self._robot_axes.SetVisibility(f.show_robot_frame)
+            self._robot_label.SetVisibility(f.show_robot_frame)
 
         for label, color in (
             (self._origin_label, f.map_label_color),
@@ -325,7 +328,9 @@ class PyVistaView(QWidget):
             prop.SetOpacity(c.alpha)
             prop.SetRenderPointsAsSpheres(c.style == "spheres")
             mapper = actor.GetMapper()
-            if c.color_transformer == "flat":
+            if c.color_transformer in ("flat", "intensity"):
+                # "intensity" is reserved — no PointCloud2 intensity plumbing yet,
+                # so it renders as flat color until the data path lands.
                 prop.SetColor(*self._hex_to_rgb01(c.flat_color))
                 mapper.ScalarVisibilityOff()
             else:
