@@ -19,7 +19,7 @@ class TopicSpec:
 # Page key → list of topics
 TOPICS = {
     "slam": [
-        TopicSpec("slam_cloud", "/fast_lio/cloud_registered_body", PointCloud2, qos_best_effort=True),
+        TopicSpec("slam_cloud", "/fast_lio/debug/cloud_registered", PointCloud2, qos_best_effort=True),
         TopicSpec("slam_path", "/fast_lio/path", Path),
     ],
     "pose": [
