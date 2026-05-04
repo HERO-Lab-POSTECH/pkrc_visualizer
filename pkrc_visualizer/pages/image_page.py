@@ -1,7 +1,8 @@
-"""Image page: dynamic panel grid. v0.3.0."""
+"""Image page: dynamic panel grid with nested QSplitter support. v0.4.0."""
 from typing import Optional
 
-from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QWidget
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QGridLayout, QSplitter, QVBoxLayout, QWidget
 from sensor_msgs.msg import CompressedImage, Image
 
 from pkrc_visualizer.display_settings import (
@@ -36,13 +37,19 @@ class ImagePage(BasePage):
 
     def _build_ui(self) -> None:
         self._toolbar = ImageToolbar()
+        self._container = QWidget()
+        self._container_layout = QVBoxLayout(self._container)
+        self._container_layout.setContentsMargins(0, 0, 0, 0)
+        self._splitter: Optional[QSplitter] = None
+        # Free-mode and 1x1 keep a grid widget around as a fallback.
         self._grid_widget = QWidget()
         self._grid = QGridLayout(self._grid_widget)
         self._grid.setContentsMargins(0, 0, 0, 0)
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._toolbar)
-        outer.addWidget(self._grid_widget, 1)
+        outer.addWidget(self._container, 1)
 
     def _wire_signals(self) -> None:
         self._toolbar.add_viewer_clicked.connect(self._add_panel)
@@ -125,12 +132,51 @@ class ImagePage(BasePage):
         self._persist()
 
     def _reflow(self) -> None:
+        layout_id = self._toolbar._layout_combo.currentText()
+        # Detach all panels from any current parent before re-parenting.
+        for panel in self._panels:
+            panel.setParent(None)
+        self._teardown_container()
+        if layout_id == "free" or layout_id == "1x1":
+            self._reflow_into_grid(layout_id)
+        else:
+            self._reflow_into_splitter(layout_id)
+
+    def _teardown_container(self) -> None:
+        # Remove all children from container_layout so the next layout
+        # builds fresh widgets without leaking.
+        while self._container_layout.count():
+            item = self._container_layout.takeAt(0)
+            w = item.widget()
+            if w is not None and w is not self._grid_widget:
+                w.setParent(None)
+                w.deleteLater()
+        self._splitter = None
+
+    def _reflow_into_grid(self, layout_id: str) -> None:
         for i in reversed(range(self._grid.count())):
             self._grid.takeAt(i)
-        _rows, cols = LAYOUT_GRID.get(self._toolbar._layout_combo.currentText(), (2, 2))
+        rows, cols = LAYOUT_GRID.get(layout_id, (2, 2))
         for idx, panel in enumerate(self._panels):
             r, c = divmod(idx, cols)
             self._grid.addWidget(panel, r, c)
+        self._container_layout.addWidget(self._grid_widget)
+
+    def _reflow_into_splitter(self, layout_id: str) -> None:
+        rows, cols = LAYOUT_GRID.get(layout_id, (2, 2))
+        if rows == 1:
+            self._splitter = QSplitter(Qt.Horizontal)
+            for panel in self._panels[:cols]:
+                self._splitter.addWidget(panel)
+        else:
+            self._splitter = QSplitter(Qt.Vertical)
+            for r in range(rows):
+                row = QSplitter(Qt.Horizontal)
+                start = r * cols
+                for panel in self._panels[start:start + cols]:
+                    row.addWidget(panel)
+                self._splitter.addWidget(row)
+        self._container_layout.addWidget(self._splitter)
 
     def _persist(self) -> None:
         panels = []
