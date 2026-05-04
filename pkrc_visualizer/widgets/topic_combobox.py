@@ -23,9 +23,6 @@ class TopicComboBox(QComboBox):
         self.blockSignals(True)
         self.clear()
         self.addItems(names)
-        completer = self.completer()
-        completer.model().setStringList(names) if hasattr(completer.model(), "setStringList") \
-            else QCompleter(names, self)
         self.setCompleter(QCompleter(names, self))
         self.completer().setCaseSensitivity(Qt.CaseInsensitive)
         self.completer().setFilterMode(Qt.MatchStartsWith)
