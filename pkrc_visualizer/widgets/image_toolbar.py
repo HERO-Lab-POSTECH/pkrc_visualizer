@@ -1,4 +1,4 @@
-"""Image 페이지 상단 툴바 — Add Viewer + Layout 선택."""
+"""Top toolbar for the Image page: Add Viewer + Layout selector."""
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QWidget
 

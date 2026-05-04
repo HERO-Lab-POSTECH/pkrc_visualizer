@@ -1,4 +1,4 @@
-"""단일 이미지 패널: 토픽 콤보 + 닫기 + ImageView + Hz 라벨."""
+"""Single image panel: topic combo + close button + ImageView + Hz label."""
 from typing import Optional, Union
 
 from PyQt5.QtCore import QTimer, pyqtSignal
@@ -39,7 +39,7 @@ class ImagePanel(QFrame):
         header.addWidget(self._close_btn)
 
         self._view = ImageView()
-        self._hz_label = QLabel("Hz: —")
+        self._hz_label = QLabel("Hz: -")
         self._hz_label.setStyleSheet("color: #888; font-size: 11px;")
 
         outer = QVBoxLayout(self)
@@ -65,4 +65,4 @@ class ImagePanel(QFrame):
         cutoff = monotonic() - HZ_WINDOW_MS / 1000.0
         self._timestamps = [t for t in self._timestamps if t >= cutoff]
         n = len(self._timestamps)
-        self._hz_label.setText(f"Hz: {n:.1f}" if n else "Hz: —")
+        self._hz_label.setText(f"Hz: {n:.1f}" if n else "Hz: -")

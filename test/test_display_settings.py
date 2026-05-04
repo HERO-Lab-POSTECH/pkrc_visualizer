@@ -176,4 +176,4 @@ def test_image_panels_non_dict_entries_skipped():
 def test_image_key_absent_returns_default_image_layout():
     s = settings_from_dict({"frames": {"map_axes_length_m": 2.0}})
     assert s.image == ImageLayoutSettings()
-    assert s.frames.map_axes_length_m == 2.0  # 다른 필드는 정상 처리
+    assert s.frames.map_axes_length_m == 2.0  # Other fields parse normally.

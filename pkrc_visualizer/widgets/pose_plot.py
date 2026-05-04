@@ -1,4 +1,4 @@
-"""matplotlib FigureCanvasQTAgg 임베드 — XY 궤적 + Path 오버레이."""
+"""Embed matplotlib FigureCanvasQTAgg: XY trajectory + Path overlay."""
 from collections import deque
 
 import matplotlib

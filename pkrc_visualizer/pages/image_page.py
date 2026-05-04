@@ -1,4 +1,4 @@
-"""Image 페이지 — 동적 패널 그리드. v0.3.0."""
+"""Image page: dynamic panel grid. v0.3.0."""
 from typing import Optional
 
 from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QWidget
@@ -16,7 +16,7 @@ PAGE_KEY = "image"
 LAYOUT_GRID = {
     "1x1": (1, 1), "2x1": (1, 2),
     "2x2": (2, 2), "3x2": (2, 3),
-    "free": (2, 2),  # free에서도 grid는 2x2 균등 폴백
+    "free": (2, 2),  # In free mode the grid still falls back to a 2x2 layout.
 }
 MSG_TYPE_MAP = {"Image": Image, "CompressedImage": CompressedImage}
 
@@ -99,7 +99,7 @@ class ImagePage(BasePage):
     def _on_panel_topic_changed(self, panel: ImagePanel, name: str) -> None:
         if name not in self._topic_pool:
             return
-        # 기존 구독 해지 후 새 토픽 구독
+        # Drop the previous subscription, then subscribe to the new topic.
         old_tid = self._panel_topic_ids.get(panel)
         if old_tid is not None:
             self._ros_client.unsubscribe(old_tid)

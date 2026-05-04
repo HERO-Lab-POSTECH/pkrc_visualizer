@@ -1,4 +1,4 @@
-"""위치/경로 페이지 — XY 궤적 + confidence 라벨."""
+"""Pose / Path page: XY trajectory + confidence label."""
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
 
 from pkrc_visualizer.pages.base_page import BasePage
@@ -9,9 +9,9 @@ class PosePage(BasePage):
     def __init__(self, ros_client, parent=None):
         super().__init__(ros_client, parent)
         self._plot = PosePlot()
-        self._confidence_label = QLabel("Confidence: —")
-        self._odom_label = QLabel("Odometry: —")
-        self._loc_label = QLabel("Localization: —")
+        self._confidence_label = QLabel("Confidence: -")
+        self._odom_label = QLabel("Odometry: -")
+        self._loc_label = QLabel("Localization: -")
 
         info_row = QHBoxLayout()
         info_row.addWidget(self._odom_label)

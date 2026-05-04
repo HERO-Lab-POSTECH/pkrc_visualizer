@@ -36,7 +36,7 @@ def frames_schema() -> list[FieldSpec]:
 def cloud_schema(include_decay: bool) -> list[FieldSpec]:
     fields_: list[FieldSpec] = [
         FieldSpec("cloud.style", "Style", "combobox",
-                  {"choices": ["points", "spheres"]}),
+                  {"choices": ["points", "square", "spheres"]}),
         FieldSpec("cloud.size", "Size (px)", "slider",
                   {"min": 1.0, "max": 20.0, "step": 1.0}),
         FieldSpec("cloud.alpha", "Alpha", "slider",

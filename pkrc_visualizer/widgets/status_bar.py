@@ -1,4 +1,4 @@
-"""토픽별 Hz를 1초 sliding window로 추정해 status bar에 표시."""
+"""Estimate per-topic Hz over a 1-second sliding window and show it in the status bar."""
 import time
 from collections import defaultdict, deque
 
@@ -15,7 +15,7 @@ class TopicHzStatusBar(QStatusBar):
         self._ros_client = ros_client
         self._timestamps: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=200))
         self._labels: dict[str, QLabel] = {}
-        self._page_label = QLabel("Page: —")
+        self._page_label = QLabel("Page: -")
         self.addWidget(self._page_label)
 
         ros_client.message_received.connect(self._on_msg, type=Qt.QueuedConnection)

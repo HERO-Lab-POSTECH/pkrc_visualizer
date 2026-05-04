@@ -1,4 +1,4 @@
-"""TopicComboBox: 후보 갱신 + 선택 시그널 검증."""
+"""TopicComboBox: candidate refresh + selection signal verification."""
 import pytest
 from PyQt5.QtCore import Qt
 from PyQt5.QtTest import QTest
@@ -19,7 +19,7 @@ def test_set_candidates_preserves_current_selection(qtbot):
     qtbot.addWidget(cb)
     cb.set_candidates(["/a", "/b"])
     cb.setCurrentText("/b")
-    cb.set_candidates(["/a", "/b", "/c"])  # /b 여전히 존재
+    cb.set_candidates(["/a", "/b", "/c"])  # /b is still present
     assert cb.currentText() == "/b"
 
 

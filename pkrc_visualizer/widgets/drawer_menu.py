@@ -1,10 +1,10 @@
-"""좌측에서 슬라이드되는 메뉴 패널. itemClicked(int) signal로 페이지 인덱스 발신."""
+"""Slide-in menu panel from the left. Emits itemClicked(int) with the page index."""
 from PyQt5.QtCore import QPropertyAnimation, QRect, pyqtSignal
 from PyQt5.QtWidgets import QFrame, QListWidget, QVBoxLayout
 
 
 class DrawerMenu(QFrame):
-    itemClicked = pyqtSignal(int)  # 선택된 페이지 인덱스
+    itemClicked = pyqtSignal(int)  # Selected page index.
 
     DRAWER_WIDTH = 220
 
@@ -22,7 +22,7 @@ class DrawerMenu(QFrame):
         self._list.addItems(items)
         self._list.currentRowChanged.connect(self.itemClicked.emit)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 40, 0, 0)  # 햄버거 버튼 공간
+        layout.setContentsMargins(0, 40, 0, 0)  # Reserve room for the hamburger button.
         layout.addWidget(self._list)
 
         self._animation = QPropertyAnimation(self, b"geometry")
@@ -53,7 +53,7 @@ class DrawerMenu(QFrame):
         self._open = False
 
     def _on_close_done(self) -> None:
-        if not self._open:  # close 애니메이션 완료 시에만 hide
+        if not self._open:  # Hide only after the close animation finishes.
             self.hide()
 
     def select(self, index: int) -> None:

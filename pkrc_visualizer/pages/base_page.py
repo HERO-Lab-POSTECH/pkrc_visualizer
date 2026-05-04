@@ -1,4 +1,4 @@
-"""모든 페이지의 공통 상위. show/hide 시 timer 제어 + RosClient 시그널 연결."""
+"""Common base for every page. Manages show/hide timers + RosClient signal wiring."""
 
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtWidgets import QWidget
@@ -24,7 +24,7 @@ class BasePage(QWidget):
         self._connect_signals()
 
     def _connect_signals(self) -> None:
-        # Qt가 자동으로 queued connection 사용 (다른 스레드 emit)
+        # Qt picks queued connection automatically (emit comes from another thread).
         self._ros_client.message_received.connect(
             self._on_message, type=Qt.QueuedConnection)
 
@@ -32,12 +32,12 @@ class BasePage(QWidget):
         if self._is_my_topic(topic_id):
             self._latest[topic_id] = msg
 
-    # 서브클래스가 override
+    # Subclasses override.
     def _is_my_topic(self, topic_id: str) -> bool:
         return False
 
     def refresh(self) -> None:
-        """서브클래스가 override — 위젯 갱신."""
+        """Subclasses override to refresh widgets."""
 
     def showEvent(self, event) -> None:
         super().showEvent(event)

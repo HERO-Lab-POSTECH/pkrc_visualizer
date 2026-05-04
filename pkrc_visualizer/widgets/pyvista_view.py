@@ -322,6 +322,10 @@ class PyVistaView(QWidget):
             self._set_actor_points(
                 self._accum_actor, self._accum_points, self._polydata_keepalive)
 
+        # "square" disables point smoothing globally on the render window so
+        # GL_POINTS render as crisp squares; "points" re-enables smoothing for
+        # the rounded look. "spheres" uses the impostor sphere shader.
+        self._plotter.render_window.SetPointSmoothing(c.style != "square")
         for actor in (self._cloud_actor, self._accum_actor):
             prop = actor.GetProperty()
             prop.SetPointSize(c.size)

@@ -115,14 +115,14 @@ def test_toggle_shows_and_hides(qtbot):
 from pkrc_visualizer.widgets.settings_button import SettingsButton
 
 
-def test_settings_button_anchors_bottom_left(qtbot):
+def test_settings_button_anchors_bottom_right(qtbot):
     parent = QWidget()
     parent.resize(800, 600)
     qtbot.addWidget(parent)
     btn = SettingsButton(parent)
     parent.show()
     qtbot.waitExposed(parent)
-    assert btn.x() == 8                 # MARGIN_LEFT
+    assert btn.x() == 800 - 32 - 8      # width - BUTTON_SIZE - MARGIN_RIGHT
     assert btn.y() == 600 - 32 - 8      # height - BUTTON_SIZE - MARGIN_BOTTOM
 
 

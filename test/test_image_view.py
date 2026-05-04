@@ -1,4 +1,4 @@
-"""ImageView가 Image / CompressedImage 둘 다 처리하는지 검증."""
+"""Verify ImageView handles both Image and CompressedImage messages."""
 import numpy as np
 import pytest
 

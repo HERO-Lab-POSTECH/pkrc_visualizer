@@ -1,4 +1,4 @@
-"""Overlay button anchored to the bottom-left of its parent widget.
+"""Overlay button anchored to the bottom-right of its parent widget.
 
 Repositions itself on parent resize via an event filter. When parented
 to a widget that hosts a native VTK canvas (PyVistaView), the WA_NativeWindow
@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QPushButton
 
 
 BUTTON_SIZE = 32
-MARGIN_LEFT = 8
+MARGIN_RIGHT = 8
 MARGIN_BOTTOM = 8
 
 
@@ -34,5 +34,7 @@ class SettingsButton(QPushButton):
 
     def _reposition(self):
         p = self.parent()
-        self.move(MARGIN_LEFT, p.height() - BUTTON_SIZE - MARGIN_BOTTOM)
+        x = p.width() - BUTTON_SIZE - MARGIN_RIGHT
+        y = p.height() - BUTTON_SIZE - MARGIN_BOTTOM
+        self.move(x, y)
         self.raise_()

@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.3.1] — 2026-05-04 — UI polish (dark theme + i18n)
+
+### Added
+- App-wide Fusion style + dark `QPalette` in `app.py::_apply_dark_theme` so
+  every widget without an explicit stylesheet gets readable contrast.
+- Cloud style `square` in `settings_schema.cloud_schema` and `pyvista_view`
+  (`SetPointSmoothing(False)` for crisp GL_POINTS squares).
+
+### Changed
+- `SettingsButton` now anchors to bottom-right (was bottom-left); panel
+  also right-aligns to the button's right edge.
+- `SettingsPanel` stylesheet expanded so `QFormLayout` labels and inactive
+  `QTabBar` tabs are visible against the dark background.
+- `_ColorButton` chooses `#000` vs `#fff` text color from the BT.601 luma
+  of the swatch (was hardcoded white, unreadable on light colors).
+- All Korean docstrings / comments / placeholders / error strings replaced
+  with ASCII English (broken-glyph-free in containers without Korean fonts).
+  Affected: 13 source files + 8 test files.
+
+### Verification
+- `python3 -m pytest test/ -q` PASS (60/60).
+- Manual: 7_ucrc_watertank `m3000d-range10-tilt90` bag replay — image
+  page panels, settings overlay (frames/cloud/background tabs), label
+  contrast, color picker swatch — all readable.
+
+### Notes
+- Resizable / draggable image panels (RQt-style), zoom-aware point size
+  (world-units), and decay-by-time (RViz convention) are deferred to
+  v0.4.0.
+
 ## [0.3.0] — 2026-05-04 — Image Page Redesign
 
 ### Added
