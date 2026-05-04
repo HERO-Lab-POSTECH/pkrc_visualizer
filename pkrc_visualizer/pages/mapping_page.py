@@ -10,13 +10,13 @@ from pkrc_visualizer.widgets.pyvista_view import PyVistaView
 class MappingPage(BasePage):
     def __init__(self, ros_client, display_store, parent=None):
         super().__init__(ros_client, parent)
-        self._display_store = display_store
-        # Task 8: install settings panel here (include_decay=False)
         self._view = PyVistaView()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._view)
         self._has_set_camera = False
+        self._install_settings_panel(
+            self._view, page_key="mapping", store=display_store, include_decay=False)
 
     def _is_my_topic(self, topic_id: str) -> bool:
         return topic_id in {"map_cloud", "map_markers", "pose_odom"}
