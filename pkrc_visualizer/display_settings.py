@@ -6,7 +6,7 @@ later task.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -52,9 +52,19 @@ def settings_to_dict(s: PageDisplaySettings) -> dict[str, Any]:
     return asdict(s)
 
 
+def _filter_known(cls, data: dict[str, Any]) -> dict[str, Any]:
+    """Drop keys that the dataclass doesn't declare.
+
+    Forward-compat: a YAML written by a future version with extra fields
+    must not crash older readers — unknown fields fall back to defaults.
+    """
+    known = {f.name for f in fields(cls)}
+    return {k: v for k, v in data.items() if k in known}
+
+
 def settings_from_dict(d: dict[str, Any]) -> PageDisplaySettings:
-    frames = FramesSettings(**d.get("frames", {}))
-    cloud = CloudSettings(**d.get("cloud", {}))
+    frames = FramesSettings(**_filter_known(FramesSettings, d.get("frames", {})))
+    cloud = CloudSettings(**_filter_known(CloudSettings, d.get("cloud", {})))
     return PageDisplaySettings(
         background=d.get("background", _DEFAULTS.background),
         frames=frames,

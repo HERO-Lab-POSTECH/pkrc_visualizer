@@ -52,6 +52,27 @@ def test_missing_file_returns_empty(tmp_path: Path):
     assert result == {}
 
 
+def test_unknown_yaml_keys_dropped(tmp_path: Path):
+    # Forward-compat: a YAML written by a future version with extra fields
+    # must not crash older readers — unknown fields fall back to defaults.
+    path = tmp_path / "settings.yaml"
+    path.write_text(
+        "slam:\n"
+        "  background: '#222222'\n"
+        "  unknown_top_level: 42\n"
+        "  frames:\n"
+        "    map_axes_length_m: 3.0\n"
+        "    future_field: 99\n"
+        "  cloud:\n"
+        "    size: 7.0\n"
+        "    intensity_field_name: 'foo'\n"
+    )
+    loaded = load_yaml(path)
+    assert loaded["slam"].background == "#222222"
+    assert loaded["slam"].frames.map_axes_length_m == 3.0
+    assert loaded["slam"].cloud.size == 7.0
+
+
 import pytest
 from PyQt5.QtTest import QSignalSpy
 
