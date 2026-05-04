@@ -6,6 +6,7 @@ import pytest
 import rclpy
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from sensor_msgs.msg import CompressedImage, Image as ImageMsg
 
 from pkrc_visualizer.ros_client import RosClient
 from pkrc_visualizer.topic_config import TopicSpec
@@ -51,3 +52,36 @@ def test_ros_client_caches_message_and_emits_signal(qtbot, rclpy_init):
 
     pub_node.destroy_node()
     client.stop()
+
+
+def test_discover_topics_filters_by_type():
+    """get_topic_names_and_types() 결과를 메시지 타입으로 필터링."""
+    client = RosClient([])
+    fake_topics = [
+        ("/cam/raw", ["sensor_msgs/msg/Image"]),
+        ("/cam/compressed", ["sensor_msgs/msg/CompressedImage"]),
+        ("/scan", ["sensor_msgs/msg/LaserScan"]),
+        ("/tf", ["tf2_msgs/msg/TFMessage"]),
+    ]
+    found = client._filter_topics(fake_topics, [ImageMsg, CompressedImage])
+    assert found == {
+        "/cam/raw": "sensor_msgs/msg/Image",
+        "/cam/compressed": "sensor_msgs/msg/CompressedImage",
+    }
+
+
+def test_discover_diff_emits_only_on_change(qtbot):
+    client = RosClient([])
+    client._known_topics = {"/a": "sensor_msgs/msg/Image"}
+    spy = []
+    client.topics_changed.connect(lambda d: spy.append(dict(d)))
+    # 변경 없음 — emit 금지
+    client._publish_if_changed({"/a": "sensor_msgs/msg/Image"})
+    assert spy == []
+    # 추가됨 — emit
+    client._publish_if_changed({
+        "/a": "sensor_msgs/msg/Image",
+        "/b": "sensor_msgs/msg/CompressedImage",
+    })
+    assert len(spy) == 1
+    assert spy[0]["/b"] == "sensor_msgs/msg/CompressedImage"
