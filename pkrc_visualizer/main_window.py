@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(SlamPage(ros_client, display_store))
         self._stack.addWidget(PosePage(ros_client))
         self._stack.addWidget(MappingPage(ros_client, display_store))
-        self._stack.addWidget(ImagePage(ros_client))
+        self._stack.addWidget(ImagePage(ros_client, display_store))
 
         container = QWidget()
         layout = QVBoxLayout(container)

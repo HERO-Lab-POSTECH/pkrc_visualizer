@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Type
 
-from sensor_msgs.msg import Image, LaserScan, PointCloud2
+from sensor_msgs.msg import PointCloud2
 from nav_msgs.msg import Odometry, Path
 from std_msgs.msg import Float32
 from visualization_msgs.msg import MarkerArray
@@ -31,13 +31,6 @@ TOPICS = {
     "mapping": [
         TopicSpec("map_cloud", "/sonar_3d_mapper/point_cloud", PointCloud2, qos_best_effort=True),
         TopicSpec("map_markers", "/sonar_3d_mapper/marker_array", MarkerArray),
-    ],
-    "image": [
-        TopicSpec("oculus_m750d_fan", "/sensor/sonar/oculus/m750d/fan_image", Image, qos_best_effort=True),
-        TopicSpec("oculus_m3000d_fan", "/sensor/sonar/oculus/m3000d/fan_image", Image, qos_best_effort=True),
-        TopicSpec("ping360_image", "/sensor/sonar/ping360/image", Image, qos_best_effort=True),
-        TopicSpec("ping360_scan", "/sensor/sonar/ping360/scan", LaserScan, qos_best_effort=True),
-        TopicSpec("sonoptix_image", "/sensor/sonar/sonoptix/image", Image, qos_best_effort=True),
     ],
 }
 
