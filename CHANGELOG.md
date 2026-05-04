@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.3.0] — 2026-05-04 — Image Page Redesign
+
+### Added
+- `widgets/topic_combobox.py` — prefix 자동완성 콤보 (rqt_image_view 스타일).
+- `widgets/image_panel.py` — 단일 패널 (콤보 + ImageView + Hz 라벨 + 닫기).
+- `widgets/image_toolbar.py` — Add Viewer + Layout 콤보 (1×1/2×1/2×2/3×2/free).
+- `RosClient.enable_discovery(msg_types)` + `topics_changed` 시그널 — 1Hz 폴링.
+- `RosClient.subscribe_dynamic(topic_name, msg_type)` / `unsubscribe(topic_id)` —
+  ref-counted 동적 구독.
+- `display_settings.py`: `ImagePanelSettings` + `ImageLayoutSettings`,
+  `PageDisplaySettings.image` 필드.
+- `ImageView`가 `sensor_msgs/CompressedImage`를 cv2.imdecode 경로로 처리.
+
+### Changed
+- `pages/image_page.py` 전면 재작성 — 4개 하드코딩 탭 → 동적 패널 그리드.
+- `topic_config.py`의 `TOPICS["image"]` 제거. 사용자가 런타임에 토픽 입력.
+- `MainWindow`가 `ImagePage`에도 `DisplaySettingsStore` 주입.
+
+### Verification
+- `python3 -m pytest test/ -v` PASS (60 tests, +22 from 0.2.0).
+
+### Notes
+- LaserScan polar 표시 (Ping360 등)는 별도 Spec C로 deferred.
+- Free 레이아웃의 드래그 위치는 세션 단위 휘발성. layout=free 모드 자체는 영구 저장.
+- `image_transport` 플러그인(theora, h264 등)은 후속 spec — v0.3.0은
+  raw `Image` + `CompressedImage`만 지원.
+
 ## [0.2.0] — 2026-05-04 — Display Properties
 
 ### Added
