@@ -222,6 +222,16 @@ class ImagePage(BasePage):
         # Mark as restored so showEvent hide/show cycle won't overwrite user drags.
         self._splitter_restored = True
 
+    def _apply_row_sizes(self, splitter: "QSplitter", raw: str) -> bool:
+        """Apply csv-encoded sizes to a single row splitter. Returns True if applied."""
+        if not isinstance(splitter, QSplitter):
+            return False
+        sizes = self._parse_sizes(raw)
+        if not sizes or len(sizes) != splitter.count():
+            return False
+        splitter.setSizes(sizes)
+        return True
+
     def _restore_splitter_state(self) -> None:
         if self._splitter is None:
             return
@@ -238,12 +248,8 @@ class ImagePage(BasePage):
             for i, raw in enumerate(groups[1:]):
                 if i >= self._splitter.count():
                     break
-                child = self._splitter.widget(i)
-                if isinstance(child, QSplitter):
-                    sizes = self._parse_sizes(raw)
-                    if sizes and len(sizes) == child.count():
-                        child.setSizes(sizes)
-                        applied = True
+                if self._apply_row_sizes(self._splitter.widget(i), raw):
+                    applied = True
         if applied:
             self._splitter_restored = True
 
