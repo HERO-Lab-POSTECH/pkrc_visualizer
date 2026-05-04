@@ -4,7 +4,6 @@ Each FieldSpec describes a single form widget. Path uses dotted notation
 matching DisplaySettingsStore.update (e.g. "cloud.size", "background").
 """
 from dataclasses import dataclass, field
-from typing import Any
 
 
 @dataclass(frozen=True)
