@@ -335,6 +335,35 @@ class PyVistaView(QWidget):
             prop.SetFontSize(f.label_font_size)
             prop.SetColor(*self._hex_to_rgb01(color))
 
+    def _install_point_mapper(self, actor, size_unit: str, size: float) -> None:
+        """Idempotent mapper swap based on size_unit ('pixels' | 'meters').
+
+        - pixels: vtkPolyDataMapper, SetPointSize on the property
+        - meters: vtkPointGaussianMapper, SetScaleFactor=size, EmissiveOff
+
+        Preserves the existing input polydata. Caller is responsible for
+        re-applying scalar/LUT config (apply_display_settings does this).
+        """
+        current = actor.GetMapper()
+        is_gaussian = isinstance(current, vtk.vtkPointGaussianMapper)
+        is_polydata = type(current) is vtk.vtkPolyDataMapper
+        want_gaussian = (size_unit == "meters")
+        if want_gaussian and is_gaussian:
+            current.SetScaleFactor(size)
+            return
+        if not want_gaussian and is_polydata:
+            return
+        polydata = current.GetInput()
+        if want_gaussian:
+            new_mapper = vtk.vtkPointGaussianMapper()
+            new_mapper.EmissiveOff()
+            new_mapper.SetScaleFactor(size)
+        else:
+            new_mapper = vtk.vtkPolyDataMapper()
+        if polydata is not None:
+            new_mapper.SetInputData(polydata)
+        actor.SetMapper(new_mapper)
+
     def _apply_cloud(self, c) -> None:
         self._cloud_color_config = (
             c.color_transformer, c.flat_color, c.color_min, c.color_max,
@@ -345,15 +374,16 @@ class PyVistaView(QWidget):
         self._expire_chunks(monotonic())
         self._enforce_hard_cap()
 
-        # "square" disables point smoothing globally on the render window so
-        # GL_POINTS render as crisp squares; "points" re-enables smoothing for
-        # the rounded look. "spheres" uses the impostor sphere shader.
+        # "square" disables point smoothing globally; "spheres" uses the
+        # impostor sphere shader (only meaningful in pixel mode).
         self._plotter.render_window.SetPointSmoothing(c.style != "square")
         for actor in (self._cloud_actor, self._accum_actor):
+            self._install_point_mapper(actor, c.size_unit, c.size)
             prop = actor.GetProperty()
-            prop.SetPointSize(c.size)
+            prop.SetPointSize(c.size)        # ignored by gaussian mapper
             prop.SetOpacity(c.alpha)
-            prop.SetRenderPointsAsSpheres(c.style == "spheres")
+            prop.SetRenderPointsAsSpheres(
+                c.style == "spheres" and c.size_unit == "pixels")
             mapper = actor.GetMapper()
             if c.color_transformer in ("flat", "intensity"):
                 # "intensity" is reserved — no PointCloud2 intensity plumbing yet,
