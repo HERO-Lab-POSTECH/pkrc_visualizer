@@ -43,3 +43,24 @@ def test_swap_back_to_pixels_restores_polydata_mapper(qtbot):
     assert isinstance(view._cloud_actor.GetMapper(), vtk.vtkPolyDataMapper)
     assert not isinstance(
         view._cloud_actor.GetMapper(), vtk.vtkPointGaussianMapper)
+
+
+def test_pixel_mode_idempotent(qtbot):
+    view = PyVistaView()
+    qtbot.addWidget(view)
+    _apply(view, size_unit="pixels", size=5.0)
+    m1 = view._cloud_actor.GetMapper()
+    _apply(view, size_unit="pixels", size=8.0)
+    m2 = view._cloud_actor.GetMapper()
+    assert m1 is m2  # same mapper instance — no recreation
+
+
+def test_meter_mode_idempotent(qtbot):
+    view = PyVistaView()
+    qtbot.addWidget(view)
+    _apply(view, size_unit="meters", size=0.5)
+    m1 = view._cloud_actor.GetMapper()
+    _apply(view, size_unit="meters", size=0.8)
+    m2 = view._cloud_actor.GetMapper()
+    assert m1 is m2
+    assert m2.GetScaleFactor() == 0.8  # parameter updated in place

@@ -346,7 +346,10 @@ class PyVistaView(QWidget):
         """
         current = actor.GetMapper()
         is_gaussian = isinstance(current, vtk.vtkPointGaussianMapper)
-        is_polydata = type(current) is vtk.vtkPolyDataMapper
+        # vtkPointGaussianMapper IS-A vtkPolyDataMapper in modern VTK, so we
+        # must exclude it explicitly to avoid treating a gaussian mapper as a
+        # pixels-mode polydata mapper.
+        is_polydata = isinstance(current, vtk.vtkPolyDataMapper) and not is_gaussian
         want_gaussian = (size_unit == "meters")
         if want_gaussian and is_gaussian:
             current.SetScaleFactor(size)
@@ -380,7 +383,7 @@ class PyVistaView(QWidget):
         for actor in (self._cloud_actor, self._accum_actor):
             self._install_point_mapper(actor, c.size_unit, c.size)
             prop = actor.GetProperty()
-            prop.SetPointSize(c.size)        # ignored by gaussian mapper
+            prop.SetPointSize(c.size)        # pixels mode only; gaussian uses SetScaleFactor
             prop.SetOpacity(c.alpha)
             prop.SetRenderPointsAsSpheres(
                 c.style == "spheres" and c.size_unit == "pixels")
