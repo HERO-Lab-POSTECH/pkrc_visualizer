@@ -59,6 +59,9 @@ def test_reset_propagates_to_view(qtbot, tmp_path):
     assert view._cloud_actor.GetProperty().GetPointSize() == 15.0
 
     panel._tabs_widget.setCurrentIndex(1)   # cloud tab
+    # store.reset emits changed synchronously (no debounce on the signal —
+    # only the disk write is debounced), so the property updates inside
+    # the click() call. No qtbot.wait needed; the assertion guards future
+    # regressions where reset accidentally becomes async.
     panel._reset_button.click()
-    qtbot.wait(120)
     assert view._cloud_actor.GetProperty().GetPointSize() == 2.0
