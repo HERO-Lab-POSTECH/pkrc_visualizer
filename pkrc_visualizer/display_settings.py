@@ -28,10 +28,11 @@ class FramesSettings:
 
 @dataclass
 class CloudSettings:
-    style: str = "points"            # points | spheres
+    style: str = "points"            # points | square | spheres
     size: float = 2.0
+    size_unit: str = "pixels"        # pixels | meters
     alpha: float = 1.0
-    decay_max_points: int = 300_000
+    decay_seconds: float = 30.0      # 0.0 disables decay (accumulate forever, capped by HARD_MAX)
     color_transformer: str = "flat"  # flat | z | intensity
     flat_color: str = "#4fc3f7"
     color_min: float = 0.0
