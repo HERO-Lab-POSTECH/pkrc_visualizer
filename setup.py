@@ -4,7 +4,7 @@ package_name = 'pkrc_visualizer'
 
 setup(
     name=package_name,
-    version='0.3.1',
+    version='0.4.0',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',

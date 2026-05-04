@@ -61,6 +61,12 @@ Layout 콤보로 그리드 모드 변경 (1×1 / 2×1 / 2×2 / 3×2 / free).
 모든 패널 + layout 선택은 `~/.config/pkrc_visualizer/display_settings.yaml`에
 자동 저장되어 재실행 시 복원.
 
+## Cloud Rendering & Layout (v0.4.0)
+
+- **v0.4.0** — Time-based cloud decay (RViz convention), zoom-aware
+  point size (world units via `vtkPointGaussianMapper`), and
+  resizable image panels (single or nested `QSplitter`).
+
 ## Architecture
 
 - 단일 프로세스 — Qt 메인 스레드(UI) + rclpy 별도 스레드(spin) + `pyqtSignal` queued connection.

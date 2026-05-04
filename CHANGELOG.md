@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.4.0] — 2026-05-04 — Cloud rendering & layout polish
+
+### Added
+- `CloudSettings.size_unit: "pixels" | "meters"` — meters mode swaps the
+  cloud actor mapper to `vtkPointGaussianMapper(SetScaleFactor=size,
+  EmissiveOff)` so splats render in world units and zoom with the camera.
+- `ImageLayoutSettings.splitter_state: str` — serialized splitter sizes
+  (`"outer_csv; row0_csv; row1_csv"`).
+- `ImagePage` now builds `1x1` and `free` via `QGridLayout` and `2x1`,
+  `2x2`, `3x2` via single or nested `QSplitter` so users can drag
+  dividers to resize panels. State is preserved when layout id is
+  unchanged and silently dropped on layout change.
+- `pyvista_view.PyVistaView._install_point_mapper(actor, size_unit, size)`
+  — idempotent mapper swap helper (vtkPolyDataMapper ↔
+  vtkPointGaussianMapper).
+
+### Changed
+- `CloudSettings.decay_max_points: int = 300_000` →
+  `decay_seconds: float = 30.0` (0.0 disables decay; RViz convention).
+  Existing YAML entries with `decay_max_points` are silently dropped via
+  `_filter_known` forward-compat.
+- `PyVistaView._accum_points` (single ndarray FIFO) →
+  `_accum_chunks: deque[(monotonic_ts, ndarray)]`.
+  `HARD_MAX_ACCUM_POINTS = 2_000_000` is a runaway-producer backstop.
+- Settings schema: `cloud.decay_max_points` (spinbox_int) →
+  `cloud.decay_seconds` (spinbox_float, 0.0–600.0). New
+  `cloud.size_unit` combobox (`pixels` | `meters`).
+- `pyvista_view`: `import time` → `from time import monotonic` so tests
+  can monkeypatch the clock without disturbing the global time module.
+- `image_toolbar.set_layout_value` no longer suppresses
+  `layout_changed` — `ImagePage._restore_from_store` uses an explicit
+  disconnect/reconnect pattern instead.
+
+### Verification
+- `python3 -m pytest test/ -q` PASS (84 tests, +24 from v0.3.1).
+- Manual on `7_ucrc_watertank` `m3000d-range10-tilt90` bag is required
+  for full feature smoke (decay 0/5/30 s trail length, size_unit
+  pixels↔meters zoom response, ImagePage divider drag + persistence).
+
+### Notes
+- TF integration (multi-publisher coordinate alignment) is deferred to
+  v0.5.0 (separate spec).
+- `free` layout still uses the grid fallback (drag-to-reorder is out of
+  scope for v0.4.0).
+
 ## [0.3.1] — 2026-05-04 — UI polish (dark theme + i18n)
 
 ### Added
