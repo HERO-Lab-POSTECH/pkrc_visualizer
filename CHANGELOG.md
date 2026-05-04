@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.2.0] — 2026-05-04 — Display Properties
+
+### Added
+- `display_settings.py` — 페이지별 dataclass + YAML codec
+  (`~/.config/pkrc_visualizer/display_settings.yaml`). 손상된 YAML은 `*.bak`으로
+  rename 후 기본값으로 폴백.
+- `widgets/settings_panel.py` — schema-driven 탭 폼 (Frames / Cloud / Background),
+  200 ms 디바운스 필드 시그널 + Reset-this-tab 버튼.
+- `widgets/settings_schema.py` — 탭별 `FieldSpec` 선언 리스트.
+- `widgets/settings_button.py` — 좌측 하단 ⚙ 오버레이 버튼
+  (VTK 캔버스 위에 z-order 보장 위해 `WA_NativeWindow` 사용).
+- `PyVistaView.apply_display_settings()` + Z-축 컬러용 jet LUT.
+
+### Changed
+- `MainWindow.__init__`이 `DisplaySettingsStore`를 받도록 변경. `app.main`이
+  프로세스당 하나의 store를 생성해 MainWindow에 주입.
+- `SlamPage`/`MappingPage` 생성자도 store를 받아 PyVistaView에 설정 패널 설치
+  (SLAM `include_decay=True`, Mapping `False` — Mapping은 누적이 아니므로
+  FIFO 길이 옵션 숨김).
+- `PyVistaView.MAX_ACCUM_POINTS` (클래스 상수) → `self.max_accum_points`
+  (인스턴스 속성)로 전환 — 런타임에 FIFO 길이 변경 가능.
+
+### Verification
+- `python3 -m pytest test/ -v` PASS (37 tests, +24 from 0.1.0).
+- 통합 테스트(`test_settings_integration.py`) — store ↔ panel ↔ view round-trip
+  + reset 동작 검증.
+
+### Notes
+- `Color transformer = intensity` 옵션은 스키마에 있으나 현재 flat 경로로 매핑됨
+  (PointCloud2 intensity 필드 plumbing은 후속 spec에서 처리).
+- Display Properties는 SLAM·Sonar Mapping 페이지에만 적용. Pose / Image 페이지는
+  변경 없음 (Image 페이지 재설계는 Spec B로 별도 진행).
+
 ## [0.1.0] — 2026-05-03 (Unreleased)
 
 ### Added

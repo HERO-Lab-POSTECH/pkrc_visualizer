@@ -33,6 +33,20 @@ ros2 run pkrc_visualizer pkrc_viz
 
 토픽 매핑은 `pkrc_visualizer/topic_config.py`에서 변경.
 
+## Display Properties (v0.2.0)
+
+SLAM 및 Sonar Mapping 페이지의 3D 뷰포트 좌측 하단에 ⚙ 버튼이 표시됩니다.
+클릭하면 Display Properties 패널이 열리며 다음 항목을 실시간으로 조정 가능:
+
+- **Frames** — `map`/`base_link` triad의 표시 여부, 길이, 라인 굵기, 라벨 폰트
+  크기, 라벨 색상.
+- **Cloud** — point size, alpha, 표시 방식(points / spheres),
+  color transformer (Flat / Z-축 jet), SLAM 한정 FIFO 누적 점수.
+- **Background** — 뷰어 배경 색상.
+
+설정은 변경 시 `~/.config/pkrc_visualizer/display_settings.yaml`에 자동 저장되고
+재시작 시 복원됩니다. "Reset this tab to defaults" 버튼은 현재 탭만 초기화.
+
 ## Architecture
 
 - 단일 프로세스 — Qt 메인 스레드(UI) + rclpy 별도 스레드(spin) + `pyqtSignal` queued connection.
