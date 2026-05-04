@@ -141,9 +141,8 @@ class ImagePage(BasePage):
             msg_type = "Image"
             if tid is not None:
                 topic_name = self._ros_client._tid_to_topic.get(tid, "")
-                msg_type = "CompressedImage" \
-                    if isinstance(self._ros_client.latest(tid), CompressedImage) \
-                    else "Image"
+                type_str = getattr(self, "_known_topic_types", {}).get(topic_name, "")
+                msg_type = "CompressedImage" if "CompressedImage" in type_str else "Image"
             panels.append(ImagePanelSettings(
                 topic_name=topic_name, msg_type=msg_type))
         self._store.update(
