@@ -8,8 +8,10 @@ from pkrc_visualizer.widgets.pyvista_view import PyVistaView
 
 
 class MappingPage(BasePage):
-    def __init__(self, ros_client, parent=None):
+    def __init__(self, ros_client, display_store, parent=None):
         super().__init__(ros_client, parent)
+        self._display_store = display_store
+        # Task 8: install settings panel here (include_decay=False)
         self._view = PyVistaView()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

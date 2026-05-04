@@ -5,6 +5,7 @@ import sys
 import rclpy
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
+from pkrc_visualizer.display_settings import DisplaySettingsStore
 from pkrc_visualizer.main_window import MainWindow
 from pkrc_visualizer.ros_client import RosClient
 from pkrc_visualizer.topic_config import all_topics
@@ -28,7 +29,8 @@ def main(args=None) -> int:
     ros_client = RosClient(all_topics())
     ros_client.start()
 
-    window = MainWindow(ros_client)
+    display_store = DisplaySettingsStore()
+    window = MainWindow(ros_client, display_store)
     window.show()
 
     # Ctrl+C로 종료 가능하게

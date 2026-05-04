@@ -15,18 +15,19 @@ PAGE_TITLES = ["SLAM", "Pose / Path", "Sonar Mapping", "Sonar Image"]
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, ros_client):
+    def __init__(self, ros_client, display_store):
         super().__init__()
         self.setWindowTitle("PKRC Visualizer")
         self.resize(1280, 800)
 
         self._ros_client = ros_client
+        self._display_store = display_store
 
         # Stacked page container
         self._stack = QStackedWidget()
-        self._stack.addWidget(SlamPage(ros_client))
+        self._stack.addWidget(SlamPage(ros_client, display_store))
         self._stack.addWidget(PosePage(ros_client))
-        self._stack.addWidget(MappingPage(ros_client))
+        self._stack.addWidget(MappingPage(ros_client, display_store))
         self._stack.addWidget(ImagePage(ros_client))
 
         container = QWidget()

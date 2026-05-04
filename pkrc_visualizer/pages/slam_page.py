@@ -9,7 +9,7 @@ from pkrc_visualizer.widgets.pyvista_view import PyVistaView
 
 
 class SlamPage(BasePage):
-    def __init__(self, ros_client, parent=None):
+    def __init__(self, ros_client, display_store, parent=None):
         super().__init__(ros_client, parent)
         self._view = PyVistaView()
 
@@ -18,6 +18,8 @@ class SlamPage(BasePage):
         layout.addWidget(self._view)
 
         self._has_set_camera = False
+        self._install_settings_panel(
+            self._view, page_key="slam", store=display_store, include_decay=True)
 
     def _is_my_topic(self, topic_id: str) -> bool:
         return topic_id in {"slam_cloud", "slam_path", "pose_odom"}
