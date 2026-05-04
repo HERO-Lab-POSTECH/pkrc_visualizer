@@ -45,6 +45,9 @@ class PageDisplaySettings:
     cloud: CloudSettings = field(default_factory=CloudSettings)
 
 
+_DEFAULTS = PageDisplaySettings()
+
+
 def settings_to_dict(s: PageDisplaySettings) -> dict[str, Any]:
     return asdict(s)
 
@@ -53,7 +56,7 @@ def settings_from_dict(d: dict[str, Any]) -> PageDisplaySettings:
     frames = FramesSettings(**d.get("frames", {}))
     cloud = CloudSettings(**d.get("cloud", {}))
     return PageDisplaySettings(
-        background=d.get("background", PageDisplaySettings().background),
+        background=d.get("background", _DEFAULTS.background),
         frames=frames,
         cloud=cloud,
     )
@@ -85,3 +88,55 @@ def save_yaml(path: Path, all_pages: dict[str, PageDisplaySettings]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serialised = {k: settings_to_dict(v) for k, v in all_pages.items()}
     path.write_text(yaml.safe_dump(serialised, sort_keys=False))
+
+
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+
+
+DEFAULT_PATH = Path.home() / ".config" / "pkrc_visualizer" / "display_settings.yaml"
+
+
+class DisplaySettingsStore(QObject):
+    """Qt-aware in-memory settings cache with debounced YAML persistence."""
+
+    changed = pyqtSignal(str, object)  # page_key, PageDisplaySettings
+
+    def __init__(self, path: Path | None = None, debounce_ms: int = 500) -> None:
+        super().__init__()
+        self._path = path or DEFAULT_PATH
+        self._pages: dict[str, PageDisplaySettings] = load_yaml(self._path)
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(debounce_ms)
+        self._save_timer.timeout.connect(self._flush)
+
+    def get(self, page_key: str) -> PageDisplaySettings:
+        return self._pages.setdefault(page_key, PageDisplaySettings())
+
+    def update(self, page_key: str, path: str, value: Any) -> None:
+        page = self.get(page_key)
+        parts = path.split(".")
+        obj = page
+        for part in parts[:-1]:
+            obj = getattr(obj, part)
+        last = parts[-1]
+        if not hasattr(obj, last):
+            raise KeyError(f"unknown setting: {page_key}.{path}")
+        setattr(obj, last, value)
+        self.changed.emit(page_key, page)
+        self._save_timer.start()
+
+    def reset(self, page_key: str, section: str | None = None) -> None:
+        defaults = PageDisplaySettings()
+        if section is None:
+            self._pages[page_key] = defaults
+        else:
+            page = self.get(page_key)
+            if not hasattr(page, section):
+                raise KeyError(f"unknown section: {section}")
+            setattr(page, section, getattr(defaults, section))
+        self.changed.emit(page_key, self.get(page_key))
+        self._save_timer.start()
+
+    def _flush(self) -> None:
+        save_yaml(self._path, self._pages)

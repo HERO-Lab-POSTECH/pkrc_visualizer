@@ -50,3 +50,56 @@ def test_corrupt_yaml_backed_up(tmp_path: Path):
 def test_missing_file_returns_empty(tmp_path: Path):
     result = load_yaml(tmp_path / "nope.yaml")
     assert result == {}
+
+
+import pytest
+from PyQt5.QtTest import QSignalSpy
+
+from pkrc_visualizer.display_settings import DisplaySettingsStore, load_yaml
+
+
+def test_store_get_returns_default(tmp_path, qtbot):
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml")
+    s = store.get("slam")
+    assert s == PageDisplaySettings()
+
+
+def test_store_update_emits_changed(tmp_path, qtbot):
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml")
+    spy = QSignalSpy(store.changed)
+    store.update("slam", "cloud.size", 7.0)
+    assert len(spy) == 1
+    assert store.get("slam").cloud.size == 7.0
+
+
+def test_store_update_top_level_field(tmp_path, qtbot):
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml")
+    store.update("slam", "background", "#000000")
+    assert store.get("slam").background == "#000000"
+
+
+def test_store_debounces_yaml_write(tmp_path, qtbot):
+    path = tmp_path / "s.yaml"
+    store = DisplaySettingsStore(path=path, debounce_ms=100)
+    store.update("slam", "cloud.size", 5.0)
+    store.update("slam", "cloud.size", 6.0)
+    store.update("slam", "cloud.size", 7.0)
+    assert not path.exists()  # not flushed yet
+    qtbot.wait(220)
+    assert path.exists()
+    assert load_yaml(path)["slam"].cloud.size == 7.0
+
+
+def test_store_reset_section(tmp_path, qtbot):
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml")
+    store.update("slam", "cloud.size", 9.0)
+    store.update("slam", "frames.label_font_size", 24)
+    store.reset("slam", section="cloud")
+    assert store.get("slam").cloud.size == 2.0  # default
+    assert store.get("slam").frames.label_font_size == 24  # untouched
+
+
+def test_store_unknown_path_raises(tmp_path, qtbot):
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml")
+    with pytest.raises(KeyError):
+        store.update("slam", "cloud.nope", 1)
