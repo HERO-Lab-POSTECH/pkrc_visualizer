@@ -67,12 +67,22 @@ def test_apply_cloud_z_transformer_attaches_scalar(view):
     assert rng == (-2.0, 2.0)
 
 
-def test_apply_cloud_decay_max_points_takes_effect(view):
-    s = PageDisplaySettings(cloud=CloudSettings(decay_max_points=50))
+def test_apply_cloud_decay_seconds_takes_effect(view, monkeypatch):
+    # Apply a 1-second decay window.
+    s = PageDisplaySettings(cloud=CloudSettings(decay_seconds=1.0))
     view.apply_display_settings(s)
-    pts = np.random.rand(200, 3).astype(np.float32)
-    view.append_cloud(pts)
-    assert view._accum_points.shape[0] == 50
+
+    monkeypatch.setattr(
+        "pkrc_visualizer.widgets.pyvista_view.monotonic", lambda: 0.0)
+    view.append_cloud(np.ones((10, 3), dtype=np.float32))
+
+    monkeypatch.setattr(
+        "pkrc_visualizer.widgets.pyvista_view.monotonic", lambda: 2.0)
+    view.append_cloud(np.zeros((5, 3), dtype=np.float32))
+
+    # The first chunk is 2 s old — older than the 1 s window — so it must be dropped.
+    assert len(view._accum_chunks) == 1
+    assert view._accum_chunks[0][1].shape[0] == 5
 
 
 def test_apply_background_updates_renderer(view):

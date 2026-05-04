@@ -8,7 +8,8 @@ Provides:
   - Auto-expanding grid sized to enclose the rendered cloud.
 """
 
-import time
+from collections import deque
+from time import monotonic
 
 import numpy as np
 import pyvista as pv
@@ -77,7 +78,7 @@ def _make_label(text, rgb=(1.0, 1.0, 1.0)):
 
 
 class PyVistaView(QWidget):
-    MAX_ACCUM_POINTS = 300_000
+    HARD_MAX_ACCUM_POINTS = 2_000_000
     GRID_UPDATE_INTERVAL_S = 1.0
     ROBOT_AXES_LENGTH_M = 0.5
     ORIGIN_AXES_LENGTH_M = 1.0
@@ -136,14 +137,15 @@ class PyVistaView(QWidget):
         self._accum_actor = self._plotter.add_mesh(
             empty.copy(), color="#4fc3f7", point_size=2,
             render_points_as_spheres=False)
-        self._accum_points = np.zeros((0, 3), dtype=np.float32)
+        # Time-stamped accumulator: (monotonic_ts, points_ndarray) per chunk.
+        self._accum_chunks: deque[tuple[float, np.ndarray]] = deque()
 
         # Cloud color config: (transformer, flat_color, color_min, color_max).
         # Read by _set_actor_points to attach the right scalar to fresh polydata.
         self._cloud_color_config = ("flat", "#4fc3f7", 0.0, 10.0)
         self._jet_lut = self._make_jet_lut()
-        # Instance-level FIFO cap so apply_display_settings can shrink it at runtime.
-        self.max_accum_points = self.MAX_ACCUM_POINTS
+        # Set by apply_display_settings; 0.0 disables decay.
+        self.decay_seconds = 30.0
 
         # Persistent vtkCubeAxesActor — bounds updated in place (no flicker).
         cube_axes = vtk.vtkCubeAxesActor()
@@ -192,14 +194,15 @@ class PyVistaView(QWidget):
         keepalive_dict[id(actor)] = polydata
         return polydata
 
-    def _maybe_update_grid(self, bbox_points):
+    def _maybe_update_grid(self, bbox_points, now=None):
         """Resize the persistent vtkCubeAxesActor to enclose the cloud.
 
         Updating SetBounds() in place avoids the actor-recreation flicker.
         """
         if bbox_points.size == 0:
             return
-        now = time.monotonic()
+        if now is None:
+            now = monotonic()
         if now - self._last_grid_update < self.GRID_UPDATE_INTERVAL_S:
             return
         mn = bbox_points.min(axis=0)
@@ -234,18 +237,38 @@ class PyVistaView(QWidget):
         if points.size == 0:
             return
         new_pts = points.astype(np.float32)
-        combined = np.vstack([self._accum_points, new_pts])
-        if combined.shape[0] > self.max_accum_points:
-            combined = combined[-self.max_accum_points:]
-        self._accum_points = combined
+        now = monotonic()
+        self._accum_chunks.append((now, new_pts))
+        self._expire_chunks(now)
+        self._enforce_hard_cap()
+        combined = self._concat_chunks()
         self._set_actor_points(self._accum_actor, combined, self._polydata_keepalive)
         self._accum_actor.GetProperty().SetColor(*pv.Color(color).float_rgb)
-        self._maybe_update_grid(combined)
+        self._maybe_update_grid(combined, now)
 
     def clear_accum(self):
-        self._accum_points = np.zeros((0, 3), dtype=np.float32)
-        self._set_actor_points(self._accum_actor, self._accum_points,
+        self._accum_chunks.clear()
+        self._set_actor_points(self._accum_actor,
+                               np.zeros((0, 3), dtype=np.float32),
                                self._polydata_keepalive)
+
+    def _expire_chunks(self, now: float) -> None:
+        if self.decay_seconds <= 0.0:
+            return
+        cutoff = now - self.decay_seconds
+        while self._accum_chunks and self._accum_chunks[0][0] < cutoff:
+            self._accum_chunks.popleft()
+
+    def _enforce_hard_cap(self) -> None:
+        total = sum(arr.shape[0] for _, arr in self._accum_chunks)
+        while total > self.HARD_MAX_ACCUM_POINTS and len(self._accum_chunks) > 1:
+            _ts, dropped = self._accum_chunks.popleft()
+            total -= dropped.shape[0]
+
+    def _concat_chunks(self) -> np.ndarray:
+        if not self._accum_chunks:
+            return np.zeros((0, 3), dtype=np.float32)
+        return np.vstack([arr for _, arr in self._accum_chunks])
 
     def update_markers(self, points, color="#ffb74d"):
         self._set_actor_points(self._marker_actor, points, self._polydata_keepalive)
@@ -316,11 +339,11 @@ class PyVistaView(QWidget):
         self._cloud_color_config = (
             c.color_transformer, c.flat_color, c.color_min, c.color_max,
         )
-        self.max_accum_points = c.decay_max_points
-        if self._accum_points.shape[0] > self.max_accum_points:
-            self._accum_points = self._accum_points[-self.max_accum_points:]
-            self._set_actor_points(
-                self._accum_actor, self._accum_points, self._polydata_keepalive)
+        self.decay_seconds = c.decay_seconds
+        # Re-apply expiration immediately so a shorter window takes effect
+        # without waiting for the next append_cloud.
+        self._expire_chunks(monotonic())
+        self._enforce_hard_cap()
 
         # "square" disables point smoothing globally on the render window so
         # GL_POINTS render as crisp squares; "points" re-enables smoothing for
@@ -341,9 +364,9 @@ class PyVistaView(QWidget):
                 mapper.ScalarVisibilityOn()
                 mapper.SetScalarRange(c.color_min, c.color_max)
                 mapper.SetLookupTable(self._jet_lut)
-        if self._accum_points.size:
+        if self._accum_chunks:
             self._set_actor_points(
-                self._accum_actor, self._accum_points, self._polydata_keepalive)
+                self._accum_actor, self._concat_chunks(), self._polydata_keepalive)
 
     def closeEvent(self, event):
         self._plotter.close()
