@@ -68,22 +68,19 @@ class BasePage(QWidget):
             # Spec §5: hide orientation widget while panel is visible
             view._orient_widget.SetEnabled(0 if panel.isVisible() else 1)
 
+        def _on_store_changed(emitted_key, settings):
+            if emitted_key != page_key:
+                return
+            view.apply_display_settings(settings)
+            panel.apply_values(settings)
+
         button.clicked.connect(_on_button_clicked)
         panel.field_changed.connect(
-            lambda path, value, k=page_key: store.update(k, path, value))
+            lambda path, value: store.update(page_key, path, value))
         panel.reset_requested.connect(
-            lambda section, k=page_key: store.reset(k, section=section))
-        store.changed.connect(
-            lambda k, settings, target_key=page_key, v=view, p=panel:
-                self._on_store_changed(k, settings, target_key, v, p))
+            lambda section: store.reset(page_key, section=section))
+        store.changed.connect(_on_store_changed)
 
         snapshot = store.get(page_key)
         view.apply_display_settings(snapshot)
         panel.apply_values(snapshot)
-
-    @staticmethod
-    def _on_store_changed(emitted_key, settings, target_key, view, panel):
-        if emitted_key != target_key:
-            return
-        view.apply_display_settings(settings)
-        panel.apply_values(settings)
