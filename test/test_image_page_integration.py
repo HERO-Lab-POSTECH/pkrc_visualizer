@@ -1,7 +1,4 @@
 """End-to-end: topics_changed → panel candidates 갱신 + add panel → store persist."""
-from unittest.mock import MagicMock
-
-import pytest
 from PyQt5.QtCore import pyqtSignal, QObject
 
 from pkrc_visualizer.display_settings import DisplaySettingsStore

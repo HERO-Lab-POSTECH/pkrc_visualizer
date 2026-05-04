@@ -1,7 +1,6 @@
 """Image 페이지 — 동적 패널 그리드. v0.3.0."""
 from typing import Optional
 
-from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QWidget
 from sensor_msgs.msg import CompressedImage, Image
 
@@ -121,14 +120,14 @@ class ImagePage(BasePage):
             return CompressedImage
         return Image
 
-    def _on_layout_changed(self, value: str) -> None:
+    def _on_layout_changed(self, _value: str) -> None:
         self._reflow()
         self._persist()
 
     def _reflow(self) -> None:
         for i in reversed(range(self._grid.count())):
             self._grid.takeAt(i)
-        rows, cols = LAYOUT_GRID.get(self._toolbar._layout_combo.currentText(), (2, 2))
+        _rows, cols = LAYOUT_GRID.get(self._toolbar._layout_combo.currentText(), (2, 2))
         for idx, panel in enumerate(self._panels):
             r, c = divmod(idx, cols)
             self._grid.addWidget(panel, r, c)
