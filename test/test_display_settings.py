@@ -205,3 +205,28 @@ def test_cloud_decay_max_points_legacy_key_silently_dropped(tmp_path: Path):
     loaded = load_yaml(path)
     assert loaded["slam"].cloud.decay_seconds == 30.0   # default, not 999999
     assert loaded["slam"].cloud.size == 4.0             # other fields parse fine
+
+
+def test_cloud_size_unit_default():
+    s = CloudSettings()
+    assert s.size_unit == "pixels"
+
+
+def test_cloud_size_unit_yaml_roundtrip(tmp_path: Path):
+    path = tmp_path / "settings.yaml"
+    pages = {
+        "slam": PageDisplaySettings(
+            cloud=CloudSettings(size_unit="meters", size=0.5),
+        ),
+    }
+    save_yaml(path, pages)
+    loaded = load_yaml(path)
+    assert loaded["slam"].cloud.size_unit == "meters"
+    assert loaded["slam"].cloud.size == 0.5
+
+
+def test_cloud_size_unit_unknown_value_passes_through():
+    # The dataclass holds the string verbatim; PyVistaView treats anything
+    # other than "meters" as "pixels" (Task 6). Codec must not coerce.
+    s = settings_from_dict({"cloud": {"size_unit": "weird"}})
+    assert s.cloud.size_unit == "weird"
