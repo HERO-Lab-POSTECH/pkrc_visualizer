@@ -39,10 +39,23 @@ class CloudSettings:
 
 
 @dataclass
+class ImagePanelSettings:
+    topic_name: str = ""
+    msg_type: str = "Image"  # "Image" | "CompressedImage"
+
+
+@dataclass
+class ImageLayoutSettings:
+    layout: str = "2x2"      # "1x1" | "2x1" | "2x2" | "3x2" | "free"
+    panels: list[ImagePanelSettings] = field(default_factory=list)
+
+
+@dataclass
 class PageDisplaySettings:
     background: str = "#1e1e1e"
     frames: FramesSettings = field(default_factory=FramesSettings)
     cloud: CloudSettings = field(default_factory=CloudSettings)
+    image: ImageLayoutSettings = field(default_factory=ImageLayoutSettings)
 
 
 _DEFAULTS = PageDisplaySettings()
@@ -65,10 +78,23 @@ def _filter_known(cls, data: dict[str, Any]) -> dict[str, Any]:
 def settings_from_dict(d: dict[str, Any]) -> PageDisplaySettings:
     frames = FramesSettings(**_filter_known(FramesSettings, d.get("frames", {})))
     cloud = CloudSettings(**_filter_known(CloudSettings, d.get("cloud", {})))
+    image_dict = d.get("image", {})
+    raw_panels = image_dict.get("panels", []) if isinstance(image_dict, dict) else []
+    panels = [
+        ImagePanelSettings(**_filter_known(ImagePanelSettings, p))
+        for p in raw_panels if isinstance(p, dict)
+    ]
+    image = ImageLayoutSettings(
+        **{
+            **_filter_known(ImageLayoutSettings, image_dict),
+            "panels": panels,
+        }
+    )
     return PageDisplaySettings(
         background=d.get("background", _DEFAULTS.background),
         frames=frames,
         cloud=cloud,
+        image=image,
     )
 
 

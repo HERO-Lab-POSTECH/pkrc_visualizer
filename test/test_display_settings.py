@@ -124,3 +124,37 @@ def test_store_unknown_path_raises(tmp_path, qtbot):
     store = DisplaySettingsStore(path=tmp_path / "s.yaml")
     with pytest.raises(KeyError):
         store.update("slam", "cloud.nope", 1)
+
+
+from pkrc_visualizer.display_settings import (
+    ImageLayoutSettings, ImagePanelSettings,
+)
+
+
+def test_image_layout_defaults():
+    s = ImageLayoutSettings()
+    assert s.layout == "2x2"
+    assert s.panels == []
+
+
+def test_image_layout_yaml_roundtrip(tmp_path: Path):
+    path = tmp_path / "settings.yaml"
+    pages = {
+        "image": PageDisplaySettings(
+            image=ImageLayoutSettings(
+                layout="3x2",
+                panels=[
+                    ImagePanelSettings(
+                        topic_name="/cam/raw", msg_type="Image"),
+                    ImagePanelSettings(
+                        topic_name="/cam/compressed", msg_type="CompressedImage"),
+                ],
+            ),
+        ),
+    }
+    save_yaml(path, pages)
+    loaded = load_yaml(path)
+    assert loaded["image"].image.layout == "3x2"
+    assert len(loaded["image"].image.panels) == 2
+    assert loaded["image"].image.panels[0].topic_name == "/cam/raw"
+    assert loaded["image"].image.panels[1].msg_type == "CompressedImage"
