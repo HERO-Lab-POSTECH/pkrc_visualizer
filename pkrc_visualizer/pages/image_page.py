@@ -123,7 +123,9 @@ class ImagePage(BasePage):
             lambda topic, p=panel: self._on_panel_topic(p, topic))
 
         dock = QDockWidget()
-        dock.setObjectName(_new_object_name())
+        obj_name = ps.object_name or _new_object_name()
+        dock.setObjectName(obj_name)
+        ps.object_name = obj_name  # cache for next persist
         dock.setFeatures(DOCK_FEATURES)
         dock.setWidget(panel)
         close_cb = lambda d=dock, p=panel: self._remove_dock(d, p)
@@ -184,8 +186,12 @@ class ImagePage(BasePage):
             return
         snapshot = ImageLayoutSettings(
             panels=[
-                ImagePanelSettings(topic_name=p.current_topic(), msg_type="Image")
-                for _, p in self._panels
+                ImagePanelSettings(
+                    topic_name=p.current_topic(),
+                    msg_type="Image",
+                    object_name=d.objectName(),
+                )
+                for d, p in self._panels
             ],
             dock_state=_encode_state(self._inner_mw.saveState()),
         )

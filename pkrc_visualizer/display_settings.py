@@ -43,6 +43,7 @@ class CloudSettings:
 class ImagePanelSettings:
     topic_name: str = ""
     msg_type: str = "Image"  # "Image" | "CompressedImage"
+    object_name: str = ""    # QDockWidget objectName for restoreState matching
 
 
 @dataclass
