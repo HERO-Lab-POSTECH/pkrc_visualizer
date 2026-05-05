@@ -28,10 +28,11 @@ class FramesSettings:
 
 @dataclass
 class CloudSettings:
-    style: str = "points"            # points | spheres
+    style: str = "points"            # points | square | spheres
     size: float = 2.0
+    size_unit: str = "meters"        # pixels | meters
     alpha: float = 1.0
-    decay_max_points: int = 300_000
+    decay_seconds: float = 30.0      # 0.0 disables decay (accumulate forever, capped by HARD_MAX)
     color_transformer: str = "flat"  # flat | z | intensity
     flat_color: str = "#4fc3f7"
     color_min: float = 0.0
@@ -46,8 +47,9 @@ class ImagePanelSettings:
 
 @dataclass
 class ImageLayoutSettings:
-    layout: str = "2x2"      # "1x1" | "2x1" | "2x2" | "3x2" | "free"
+    layout: str = "2x2"               # "1x1" | "2x1" | "2x2" | "3x2" | "free"
     panels: list[ImagePanelSettings] = field(default_factory=list)
+    splitter_state: str = ""          # serialized splitter sizes ("outer_csv; row0_csv; row1_csv"); "" = no restore
 
 
 @dataclass

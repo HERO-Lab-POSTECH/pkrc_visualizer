@@ -1,4 +1,4 @@
-"""토픽 → 페이지 매핑 한 곳 관리. 운용 환경마다 수정될 핫스팟."""
+"""Topic-to-page mapping kept in one place. Tweak per deployment."""
 from dataclasses import dataclass
 from typing import Type
 
@@ -10,10 +10,10 @@ from visualization_msgs.msg import MarkerArray
 
 @dataclass(frozen=True)
 class TopicSpec:
-    topic_id: str       # 페이지 내부에서 라우팅할 키 (예: "slam_cloud")
-    topic_name: str     # ROS2 토픽 이름
-    msg_type: Type      # 메시지 클래스
-    qos_best_effort: bool = False  # True면 BEST_EFFORT QoS로 구독
+    topic_id: str       # Routing key inside a page (e.g. "slam_cloud")
+    topic_name: str     # ROS2 topic name
+    msg_type: Type      # Message class
+    qos_best_effort: bool = False  # If True, subscribe with BEST_EFFORT QoS
 
 
 # Page key → list of topics
@@ -36,5 +36,5 @@ TOPICS = {
 
 
 def all_topics() -> list[TopicSpec]:
-    """모든 페이지의 토픽을 평탄화한 리스트."""
+    """Flat list of every page's topics."""
     return [t for topics in TOPICS.values() for t in topics]

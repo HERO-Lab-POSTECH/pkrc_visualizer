@@ -1,4 +1,4 @@
-"""ImageToolbar: + Add Viewer + Layout 콤보."""
+"""ImageToolbar: + Add Viewer + Layout combo."""
 from pkrc_visualizer.widgets.image_toolbar import ImageToolbar, LAYOUT_OPTIONS
 
 

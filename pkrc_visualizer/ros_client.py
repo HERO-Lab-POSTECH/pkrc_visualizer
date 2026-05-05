@@ -1,4 +1,4 @@
-"""rclpy를 별도 스레드에서 spin하면서 토픽을 구독하고 Qt signal로 전달."""
+"""Spin rclpy on a separate thread and forward subscribed topics as Qt signals."""
 import threading
 from typing import Any, Iterable, Optional
 
@@ -11,7 +11,7 @@ from pkrc_visualizer.topic_config import TopicSpec
 
 
 class RosClient(QObject):
-    """모든 토픽을 항상 구독하면서 최신 메시지를 cache + pyqtSignal로 푸시."""
+    """Subscribe to every topic, cache the latest message, and emit it via pyqtSignal."""
 
     message_received = pyqtSignal(str, object)  # (topic_id, msg)
     topics_changed = pyqtSignal(dict)            # {topic_name: type_str}
@@ -37,7 +37,7 @@ class RosClient(QObject):
 
     def start(self) -> None:
         if not rclpy.ok():
-            raise RuntimeError("rclpy.init()이 먼저 호출되어야 합니다.")
+            raise RuntimeError("rclpy.init() must be called first.")
         self._node = rclpy.create_node(self._node_name)
         for spec in self._specs:
             self._subscribe(spec)
@@ -45,7 +45,7 @@ class RosClient(QObject):
         self._executor_thread.start()
 
     def _subscribe(self, spec: TopicSpec) -> None:
-        assert self._node is not None, "RosClient.start()가 먼저 호출되어야 합니다."
+        assert self._node is not None, "RosClient.start() must be called first."
         qos = QoSProfile(depth=10)
         if spec.qos_best_effort:
             qos.reliability = ReliabilityPolicy.BEST_EFFORT
@@ -56,7 +56,7 @@ class RosClient(QObject):
         )
 
     def enable_discovery(self, msg_types: list[type]) -> None:
-        """주기적 토픽 발견 시작. 발견된 토픽 타입이 변경되면 topics_changed emit."""
+        """Begin periodic topic discovery. Emit topics_changed when the matching set changes."""
         self._discover_msg_types = list(msg_types)
         if self._discover_timer is None:
             self._discover_timer = QTimer(self)
@@ -82,9 +82,9 @@ class RosClient(QObject):
         raw: list[tuple[str, list[str]]],
         msg_types: list[type],
     ) -> dict[str, str]:
-        """raw = [(name, [type_str, ...]), ...] → {name: first_matching_type_str}.
+        """raw = [(name, [type_str, ...]), ...] -> {name: first_matching_type_str}.
 
-        한 토픽이 여러 type을 가질 수 있으나 (rare) 첫 매칭만 사용.
+        A topic can carry multiple types (rare); only the first match is used.
         """
         wanted = {f"{cls.__module__.split('.')[0]}/msg/{cls.__name__}"
                   for cls in msg_types}
@@ -112,7 +112,7 @@ class RosClient(QObject):
         while not self._stop_event.is_set():
             try:
                 rclpy.spin_once(self._node, timeout_sec=0.1)
-            except Exception as exc:  # noqa: BLE001 — Qt UI는 계속 살리기 위함
+            except Exception as exc:  # noqa: BLE001 - keep the Qt UI alive on errors
                 self._node.get_logger().error(f"spin loop exception: {exc}")
 
     def latest(self, topic_id: str) -> Optional[Any]:
@@ -125,7 +125,7 @@ class RosClient(QObject):
         return f"dyn_{self._tid_seq}_{sanitized}"
 
     def subscribe_dynamic(self, topic_name: str, msg_type: type) -> str:
-        """동적 구독. 동일 topic_name 반복 호출은 ref count 증가만."""
+        """Dynamic subscribe. Repeated calls for the same topic_name only bump the ref count."""
         topic_id = self._make_topic_id(topic_name)
         if topic_name in self._dynamic_subs:
             sub, count = self._dynamic_subs[topic_name]
@@ -156,7 +156,7 @@ class RosClient(QObject):
             self._dynamic_subs[topic_name] = (sub, count - 1)
 
     def _on_dynamic_msg(self, topic_name: str, msg: Any) -> None:
-        """동적 구독이 받은 메시지를 활성 topic_id 모두에게 fan-out."""
+        """Fan out a dynamic-subscription message to every active topic_id."""
         for tid, name in self._tid_to_topic.items():
             if name == topic_name:
                 with self._cache_lock:

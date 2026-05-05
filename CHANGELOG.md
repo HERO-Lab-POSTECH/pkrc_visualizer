@@ -1,5 +1,86 @@
 # Changelog
 
+## [0.4.0] — 2026-05-04 — Cloud rendering & layout polish
+
+### Added
+- `CloudSettings.size_unit: "pixels" | "meters"` — meters mode swaps the
+  cloud actor mapper to `vtkPointGaussianMapper(SetScaleFactor=size,
+  EmissiveOff)` so splats render in world units and zoom with the camera.
+- **Default `size_unit` is now `meters`** (was `pixels`) so first-run users
+  immediately get zoom-aware splats. Existing YAML files keep their saved
+  value via `_filter_known`.
+- `cloud.size` slider widened to `min=0.01, max=20.0, step=0.1` (was
+  `min=1.0, max=20.0, step=1.0`) so meters mode can express sub-meter
+  splat radii (e.g. 0.05 m) without breaking pixel-mode usability.
+- `ImageLayoutSettings.splitter_state: str` — serialized splitter sizes
+  (`"outer_csv; row0_csv; row1_csv"`).
+- `ImagePage` now builds `1x1` and `free` via `QGridLayout` and `2x1`,
+  `2x2`, `3x2` via single or nested `QSplitter` so users can drag
+  dividers to resize panels. State is preserved when layout id is
+  unchanged and silently dropped on layout change.
+- `pyvista_view.PyVistaView._install_point_mapper(actor, size_unit, size)`
+  — idempotent mapper swap helper (vtkPolyDataMapper ↔
+  vtkPointGaussianMapper).
+
+### Changed
+- `CloudSettings.decay_max_points: int = 300_000` →
+  `decay_seconds: float = 30.0` (0.0 disables decay; RViz convention).
+  Existing YAML entries with `decay_max_points` are silently dropped via
+  `_filter_known` forward-compat.
+- `PyVistaView._accum_points` (single ndarray FIFO) →
+  `_accum_chunks: deque[(monotonic_ts, ndarray)]`.
+  `HARD_MAX_ACCUM_POINTS = 2_000_000` is a runaway-producer backstop.
+- Settings schema: `cloud.decay_max_points` (spinbox_int) →
+  `cloud.decay_seconds` (spinbox_float, 0.0–600.0). New
+  `cloud.size_unit` combobox (`pixels` | `meters`).
+- `pyvista_view`: `import time` → `from time import monotonic` so tests
+  can monkeypatch the clock without disturbing the global time module.
+- `image_toolbar.set_layout_value` no longer suppresses
+  `layout_changed` — `ImagePage._restore_from_store` uses an explicit
+  disconnect/reconnect pattern instead.
+
+### Verification
+- `python3 -m pytest test/ -q` PASS (84 tests, +24 from v0.3.1).
+- Manual on `7_ucrc_watertank` `m3000d-range10-tilt90` bag is required
+  for full feature smoke (decay 0/5/30 s trail length, size_unit
+  pixels↔meters zoom response, ImagePage divider drag + persistence).
+
+### Notes
+- TF integration (multi-publisher coordinate alignment) is deferred to
+  v0.5.0 (separate spec).
+- `free` layout still uses the grid fallback (drag-to-reorder is out of
+  scope for v0.4.0).
+
+## [0.3.1] — 2026-05-04 — UI polish (dark theme + i18n)
+
+### Added
+- App-wide Fusion style + dark `QPalette` in `app.py::_apply_dark_theme` so
+  every widget without an explicit stylesheet gets readable contrast.
+- Cloud style `square` in `settings_schema.cloud_schema` and `pyvista_view`
+  (`SetPointSmoothing(False)` for crisp GL_POINTS squares).
+
+### Changed
+- `SettingsButton` now anchors to bottom-right (was bottom-left); panel
+  also right-aligns to the button's right edge.
+- `SettingsPanel` stylesheet expanded so `QFormLayout` labels and inactive
+  `QTabBar` tabs are visible against the dark background.
+- `_ColorButton` chooses `#000` vs `#fff` text color from the BT.601 luma
+  of the swatch (was hardcoded white, unreadable on light colors).
+- All Korean docstrings / comments / placeholders / error strings replaced
+  with ASCII English (broken-glyph-free in containers without Korean fonts).
+  Affected: 13 source files + 8 test files.
+
+### Verification
+- `python3 -m pytest test/ -q` PASS (60/60).
+- Manual: 7_ucrc_watertank `m3000d-range10-tilt90` bag replay — image
+  page panels, settings overlay (frames/cloud/background tabs), label
+  contrast, color picker swatch — all readable.
+
+### Notes
+- Resizable / draggable image panels (RQt-style), zoom-aware point size
+  (world-units), and decay-by-time (RViz convention) are deferred to
+  v0.4.0.
+
 ## [0.3.0] — 2026-05-04 — Image Page Redesign
 
 ### Added

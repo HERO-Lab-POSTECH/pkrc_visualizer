@@ -1,4 +1,4 @@
-"""Schema-driven settings panel that overlays a parent QWidget bottom-left."""
+"""Schema-driven settings panel that overlays a parent QWidget bottom-right."""
 from typing import Any
 
 from PyQt5.QtCore import (
@@ -20,6 +20,19 @@ ANIMATION_MS = 240
 DEBOUNCE_MS = 200
 
 
+def _is_light_color(hex_color: str) -> bool:
+    """Return True if a `#rrggbb` color is light enough to need dark text."""
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return True
+    r = int(h[0:2], 16)
+    g = int(h[2:4], 16)
+    b = int(h[4:6], 16)
+    # ITU-R BT.601 luma approximation, normalised to [0, 1].
+    luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+    return luma > 0.55
+
+
 class _ColorButton(QPushButton):
     color_picked = pyqtSignal(str)
 
@@ -38,8 +51,9 @@ class _ColorButton(QPushButton):
         self._refresh()
 
     def _refresh(self) -> None:
+        text_color = "#000" if _is_light_color(self._color) else "#fff"
         self.setStyleSheet(
-            f"background:{self._color};color:#000;"
+            f"background:{self._color};color:{text_color};"
             "border:1px solid #555;border-radius:3px;"
         )
         self.setText(self._color)
@@ -52,7 +66,7 @@ class _ColorButton(QPushButton):
 
 
 class SettingsPanel(QFrame):
-    """Bottom-left overlay panel rendered from a schema.
+    """Bottom-right overlay panel rendered from a schema.
 
     Emits `field_changed(path, value)` (debounced) when a widget value
     changes. Emits `reset_requested(tab_id)` when the Reset button is
@@ -68,9 +82,13 @@ class SettingsPanel(QFrame):
         self.setStyleSheet(
             "#SettingsPanel { background:#2d2d30; border:1px solid #3e3e42; "
             "border-radius:6px; } "
+            "#SettingsPanel QScrollArea { background:#2d2d30; border:none; } "
+            "#SettingsPanel QScrollArea > QWidget > QWidget { background:#2d2d30; } "
             "QLabel { color:#f0f0f0; } "
-            "QTabBar::tab { color:#f0f0f0; padding:6px 12px; } "
-            "QTabBar::tab:selected { background:#094771; }"
+            "QTabBar::tab { color:#f0f0f0; background:#3e3e42; padding:6px 12px; "
+            "border:1px solid #2d2d30; } "
+            "QTabBar::tab:selected { background:#094771; } "
+            "QTabBar::tab:hover { background:#505056; }"
         )
         self.hide()
         self._widgets: dict[str, QWidget] = {}
@@ -207,7 +225,9 @@ class SettingsPanel(QFrame):
         target_h = max(0, min(PANEL_MAX_HEIGHT, parent_rect.height() - 16))
         if target_h == 0:
             return
-        x = anchor_rect.x()
+        # Right-align the panel with the button (panel grows leftward
+        # and upward from the button's top-right corner).
+        x = max(8, anchor_rect.right() - target_w)
         y = max(8, anchor_rect.y() - target_h - 4)
         self.setGeometry(x, anchor_rect.y(), target_w, 0)
         self.show()

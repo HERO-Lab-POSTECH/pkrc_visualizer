@@ -1,7 +1,8 @@
-"""Image 페이지 — 동적 패널 그리드. v0.3.0."""
+"""Image page: dynamic panel grid with nested QSplitter support. v0.4.0."""
 from typing import Optional
 
-from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QWidget
+from PyQt5.QtCore import Qt, QEvent
+from PyQt5.QtWidgets import QGridLayout, QSplitter, QVBoxLayout, QWidget
 from sensor_msgs.msg import CompressedImage, Image
 
 from pkrc_visualizer.display_settings import (
@@ -16,7 +17,7 @@ PAGE_KEY = "image"
 LAYOUT_GRID = {
     "1x1": (1, 1), "2x1": (1, 2),
     "2x2": (2, 2), "3x2": (2, 3),
-    "free": (2, 2),  # free에서도 grid는 2x2 균등 폴백
+    "free": (2, 2),  # In free mode the grid still falls back to a 2x2 layout.
 }
 MSG_TYPE_MAP = {"Image": Image, "CompressedImage": CompressedImage}
 
@@ -29,6 +30,7 @@ class ImagePage(BasePage):
         self._panel_topic_ids: dict[ImagePanel, Optional[str]] = {}
         self._topic_pool: list[str] = []
 
+        self._splitter_restored: bool = False
         self._build_ui()
         self._wire_signals()
         ros_client.enable_discovery([Image, CompressedImage])
@@ -36,13 +38,28 @@ class ImagePage(BasePage):
 
     def _build_ui(self) -> None:
         self._toolbar = ImageToolbar()
+        self._container = QWidget()
+        self._container_layout = QVBoxLayout(self._container)
+        self._container_layout.setContentsMargins(0, 0, 0, 0)
+        self._splitter: Optional[QSplitter] = None
+        # Free-mode and 1x1 keep a grid widget around as a fallback.
         self._grid_widget = QWidget()
         self._grid = QGridLayout(self._grid_widget)
         self._grid.setContentsMargins(0, 0, 0, 0)
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._toolbar)
-        outer.addWidget(self._grid_widget, 1)
+        outer.addWidget(self._container, 1)
+
+    def showEvent(self, event: QEvent) -> None:
+        super().showEvent(event)
+        # Restore splitter positions after layout has been finalized.
+        # setSizes() must run after the splitter is visible so the container
+        # has assigned a real size to it; doing it here is reliable.
+        # Guard against re-firing on hide/show cycles overwriting user drags.
+        if self._splitter is not None and not self._splitter_restored:
+            self._restore_splitter_state()
 
     def _wire_signals(self) -> None:
         self._toolbar.add_viewer_clicked.connect(self._add_panel)
@@ -50,7 +67,10 @@ class ImagePage(BasePage):
         self._ros_client.topics_changed.connect(self._on_topics_changed)
 
     def _restore_from_store(self, layout: ImageLayoutSettings) -> None:
+        # Disconnect layout_changed while restoring to avoid a spurious reflow.
+        self._toolbar.layout_changed.disconnect(self._on_layout_changed)
         self._toolbar.set_layout_value(layout.layout)
+        self._toolbar.layout_changed.connect(self._on_layout_changed)
         for ps in layout.panels:
             panel = self._add_panel()
             if ps.topic_name:
@@ -99,7 +119,7 @@ class ImagePage(BasePage):
     def _on_panel_topic_changed(self, panel: ImagePanel, name: str) -> None:
         if name not in self._topic_pool:
             return
-        # 기존 구독 해지 후 새 토픽 구독
+        # Drop the previous subscription, then subscribe to the new topic.
         old_tid = self._panel_topic_ids.get(panel)
         if old_tid is not None:
             self._ros_client.unsubscribe(old_tid)
@@ -125,12 +145,120 @@ class ImagePage(BasePage):
         self._persist()
 
     def _reflow(self) -> None:
+        layout_id = self._toolbar._layout_combo.currentText()
+        # Detach all panels from any current parent before re-parenting.
+        for panel in self._panels:
+            panel.setParent(None)
+        self._teardown_container()
+        if layout_id == "free" or layout_id == "1x1":
+            self._reflow_into_grid(layout_id)
+        else:
+            self._reflow_into_splitter(layout_id)
+
+    def _teardown_container(self) -> None:
+        # Remove all children from container_layout so the next layout
+        # builds fresh widgets without leaking.
+        while self._container_layout.count():
+            item = self._container_layout.takeAt(0)
+            w = item.widget()
+            if w is not None and w is not self._grid_widget:
+                w.setParent(None)
+                w.deleteLater()
+        self._splitter = None
+
+    def _reflow_into_grid(self, layout_id: str) -> None:
         for i in reversed(range(self._grid.count())):
             self._grid.takeAt(i)
-        _rows, cols = LAYOUT_GRID.get(self._toolbar._layout_combo.currentText(), (2, 2))
+        _, cols = LAYOUT_GRID.get(layout_id, (2, 2))
         for idx, panel in enumerate(self._panels):
             r, c = divmod(idx, cols)
             self._grid.addWidget(panel, r, c)
+        self._container_layout.addWidget(self._grid_widget)
+
+    def _reflow_into_splitter(self, layout_id: str) -> None:
+        rows, cols = LAYOUT_GRID.get(layout_id, (2, 2))
+        if rows == 1:
+            self._splitter = QSplitter(Qt.Horizontal)
+            for panel in self._panels[:cols]:
+                self._splitter.addWidget(panel)
+        else:
+            self._splitter = QSplitter(Qt.Vertical)
+            for r in range(rows):
+                row = QSplitter(Qt.Horizontal)
+                start = r * cols
+                for panel in self._panels[start:start + cols]:
+                    row.addWidget(panel)
+                self._splitter.addWidget(row)
+        self._container_layout.addWidget(self._splitter)
+        self._wire_splitter_signals(self._splitter)
+        self._splitter_restored = False
+        self._restore_splitter_state()
+
+    def _wire_splitter_signals(self, splitter: QSplitter) -> None:
+        splitter.splitterMoved.connect(
+            lambda _pos, _idx: self._capture_splitter_state())
+        for i in range(splitter.count()):
+            child = splitter.widget(i)
+            if isinstance(child, QSplitter):
+                self._wire_splitter_signals(child)
+
+    def _capture_splitter_state(self) -> None:
+        if self._splitter is None:
+            return
+        parts = [",".join(str(s) for s in self._splitter.sizes())]
+        if self._splitter.orientation() == Qt.Vertical:
+            for i in range(self._splitter.count()):
+                child = self._splitter.widget(i)
+                if isinstance(child, QSplitter):
+                    parts.append(",".join(str(s) for s in child.sizes()))
+        state = ";".join(parts)
+        layout = self._store.get(PAGE_KEY).image
+        new_layout = ImageLayoutSettings(
+            layout=layout.layout,
+            panels=list(layout.panels),
+            splitter_state=state,
+        )
+        self._store.update(PAGE_KEY, "image", new_layout)
+        # Mark as restored so showEvent hide/show cycle won't overwrite user drags.
+        self._splitter_restored = True
+
+    def _apply_row_sizes(self, splitter: "QSplitter", raw: str) -> bool:
+        """Apply csv-encoded sizes to a single row splitter. Returns True if applied."""
+        if not isinstance(splitter, QSplitter):
+            return False
+        sizes = self._parse_sizes(raw)
+        if not sizes or len(sizes) != splitter.count():
+            return False
+        splitter.setSizes(sizes)
+        return True
+
+    def _restore_splitter_state(self) -> None:
+        if self._splitter is None:
+            return
+        state_str = self._store.get(PAGE_KEY).image.splitter_state
+        if not state_str:
+            return
+        groups = state_str.split(";")
+        applied = False
+        outer_sizes = self._parse_sizes(groups[0])
+        if outer_sizes and len(outer_sizes) == self._splitter.count():
+            self._splitter.setSizes(outer_sizes)
+            applied = True
+        if self._splitter.orientation() == Qt.Vertical and len(groups) > 1:
+            for i, raw in enumerate(groups[1:]):
+                if i >= self._splitter.count():
+                    break
+                if self._apply_row_sizes(self._splitter.widget(i), raw):
+                    applied = True
+        if applied:
+            self._splitter_restored = True
+
+    @staticmethod
+    def _parse_sizes(raw: str) -> list[int]:
+        try:
+            return [int(s) for s in raw.split(",") if s.strip()]
+        except ValueError:
+            return []
 
     def _persist(self) -> None:
         panels = []
@@ -144,9 +272,14 @@ class ImagePage(BasePage):
                 msg_type = "CompressedImage" if "CompressedImage" in type_str else "Image"
             panels.append(ImagePanelSettings(
                 topic_name=topic_name, msg_type=msg_type))
+        new_layout_id = self._toolbar._layout_combo.currentText()
+        old = self._store.get(PAGE_KEY).image
+        # Layout id changed -> drop incompatible splitter state.
+        keep_state = old.splitter_state if new_layout_id == old.layout else ""
         self._store.update(
             PAGE_KEY, "image",
             ImageLayoutSettings(
-                layout=self._toolbar._layout_combo.currentText(),
+                layout=new_layout_id,
                 panels=panels,
+                splitter_state=keep_state,
             ))

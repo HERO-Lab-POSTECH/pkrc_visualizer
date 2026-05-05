@@ -1,4 +1,4 @@
-"""MainWindow: 햄버거 토글 + 메뉴 클릭 → 페이지 전환 smoke."""
+"""MainWindow: hamburger toggle + menu click -> page switch smoke."""
 from unittest.mock import MagicMock
 
 import pytest

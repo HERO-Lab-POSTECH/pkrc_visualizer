@@ -1,4 +1,4 @@
-"""Sonar Mapping 페이지 — /sonar_3d_mapper/point_cloud + marker_array 통합 표시."""
+"""Sonar Mapping page: combined view of /sonar_3d_mapper/point_cloud + marker_array."""
 import numpy as np
 from PyQt5.QtWidgets import QVBoxLayout
 from sensor_msgs_py import point_cloud2
@@ -54,11 +54,11 @@ class MappingPage(BasePage):
     def _markers_to_array(msg) -> np.ndarray:
         coords: list[tuple[float, float, float]] = []
         for marker in msg.markers:
-            # POINTS / LINE_STRIP / SPHERE_LIST / CUBE_LIST 등은 marker.points에 있음
+            # POINTS / LINE_STRIP / SPHERE_LIST / CUBE_LIST etc. carry marker.points.
             if marker.points:
                 coords.extend((p.x, p.y, p.z) for p in marker.points)
             else:
-                # CUBE/SPHERE 단일 마커는 pose.position 하나
+                # CUBE/SPHERE single markers expose only pose.position.
                 p = marker.pose.position
                 coords.append((p.x, p.y, p.z))
         return np.array(coords, dtype=np.float32) if coords else np.zeros((0, 3), dtype=np.float32)

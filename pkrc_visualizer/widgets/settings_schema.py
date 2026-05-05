@@ -36,16 +36,18 @@ def frames_schema() -> list[FieldSpec]:
 def cloud_schema(include_decay: bool) -> list[FieldSpec]:
     fields_: list[FieldSpec] = [
         FieldSpec("cloud.style", "Style", "combobox",
-                  {"choices": ["points", "spheres"]}),
-        FieldSpec("cloud.size", "Size (px)", "slider",
-                  {"min": 1.0, "max": 20.0, "step": 1.0}),
+                  {"choices": ["points", "square", "spheres"]}),
+        FieldSpec("cloud.size", "Size (px or m)", "slider",
+                  {"min": 0.01, "max": 20.0, "step": 0.1}),
+        FieldSpec("cloud.size_unit", "Size unit", "combobox",
+                  {"choices": ["pixels", "meters"]}),
         FieldSpec("cloud.alpha", "Alpha", "slider",
                   {"min": 0.0, "max": 1.0, "step": 0.05}),
     ]
     if include_decay:
-        fields_.append(FieldSpec("cloud.decay_max_points",
-                                 "Decay (max points)", "spinbox_int",
-                                 {"min": 10_000, "max": 2_000_000, "step": 10_000}))
+        fields_.append(FieldSpec("cloud.decay_seconds",
+                                 "Decay time (s, 0 = off)", "spinbox_float",
+                                 {"min": 0.0, "max": 600.0, "step": 1.0}))
     fields_.extend([
         FieldSpec("cloud.color_transformer", "Color transformer", "combobox",
                   {"choices": ["flat", "z", "intensity"]}),

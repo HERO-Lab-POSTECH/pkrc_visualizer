@@ -1,4 +1,4 @@
-"""End-to-end: topics_changed → panel candidates 갱신 + add panel → store persist."""
+"""End-to-end: topics_changed -> panel candidate refresh + add panel -> store persist."""
 from PyQt5.QtCore import pyqtSignal, QObject
 
 from pkrc_visualizer.display_settings import DisplaySettingsStore
@@ -37,13 +37,13 @@ def test_topics_changed_propagates_to_panels(qtbot, tmp_path):
     page = ImagePage(ros, store)
     qtbot.addWidget(page)
 
-    # 패널 1개 추가
+    # Add one panel.
     page._add_panel()
     qtbot.wait(20)
     assert len(page._panels) == 1
-    assert page._panels[0]._combo.count() == 0  # 풀 비어있음
+    assert page._panels[0]._combo.count() == 0  # Pool is empty.
 
-    # 토픽 발견 시뮬
+    # Simulate topic discovery.
     ros.topics_changed.emit({
         "/cam/raw": "sensor_msgs/msg/Image",
         "/cam/jpg": "sensor_msgs/msg/CompressedImage",

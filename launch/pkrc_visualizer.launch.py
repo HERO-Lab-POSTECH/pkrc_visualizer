@@ -1,4 +1,4 @@
-"""pkrc_visualizer 단일 노드 실행."""
+"""Launch the single pkrc_visualizer node."""
 from launch import LaunchDescription
 from launch_ros.actions import Node
 

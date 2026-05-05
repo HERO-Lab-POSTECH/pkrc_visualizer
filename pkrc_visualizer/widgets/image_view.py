@@ -19,7 +19,7 @@ class ImageView(QLabel):
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(320, 240)
         self.setStyleSheet("background-color: #1e1e1e; color: #888;")
-        self.setText("대기 중…")
+        self.setText("(no image)")
         self._bridge = CvBridge()
 
     def set_image_msg(self, msg: Optional[ImageLike]) -> None:
@@ -28,7 +28,7 @@ class ImageView(QLabel):
         try:
             qimg = self._convert(msg)
         except (CvBridgeError, ValueError, cv2.error) as exc:
-            self.setText(f"변환 실패: {exc}")
+            self.setText(f"convert failed: {exc}")
             return
         pixmap = QPixmap.fromImage(qimg).scaled(
             self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)

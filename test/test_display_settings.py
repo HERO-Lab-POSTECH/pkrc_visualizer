@@ -16,7 +16,8 @@ def test_dataclass_defaults():
     assert s.background == "#1e1e1e"
     assert s.frames.map_axes_length_m == 1.0
     assert s.cloud.color_transformer == "flat"
-    assert s.cloud.decay_max_points == 300_000
+    assert s.cloud.decay_seconds == 30.0
+    assert s.cloud.size_unit == "meters"
 
 
 def test_yaml_roundtrip(tmp_path: Path):
@@ -176,4 +177,76 @@ def test_image_panels_non_dict_entries_skipped():
 def test_image_key_absent_returns_default_image_layout():
     s = settings_from_dict({"frames": {"map_axes_length_m": 2.0}})
     assert s.image == ImageLayoutSettings()
-    assert s.frames.map_axes_length_m == 2.0  # 다른 필드는 정상 처리
+    assert s.frames.map_axes_length_m == 2.0  # Other fields parse normally.
+
+
+def test_cloud_decay_seconds_yaml_roundtrip(tmp_path: Path):
+    path = tmp_path / "settings.yaml"
+    pages = {
+        "slam": PageDisplaySettings(
+            cloud=CloudSettings(decay_seconds=12.5),
+        ),
+    }
+    save_yaml(path, pages)
+    loaded = load_yaml(path)
+    assert loaded["slam"].cloud.decay_seconds == 12.5
+
+
+def test_cloud_decay_max_points_legacy_key_silently_dropped(tmp_path: Path):
+    # YAML written by v0.3.x had `decay_max_points`; v0.4.0 must silently
+    # drop the unknown key and fall back to the new default.
+    path = tmp_path / "settings.yaml"
+    path.write_text(
+        "slam:\n"
+        "  cloud:\n"
+        "    decay_max_points: 999999\n"
+        "    size: 4.0\n"
+    )
+    loaded = load_yaml(path)
+    assert loaded["slam"].cloud.decay_seconds == 30.0   # default, not 999999
+    assert loaded["slam"].cloud.size == 4.0             # other fields parse fine
+
+
+def test_cloud_size_unit_default():
+    s = CloudSettings()
+    assert s.size_unit == "meters"
+
+
+def test_cloud_size_unit_yaml_roundtrip(tmp_path: Path):
+    path = tmp_path / "settings.yaml"
+    pages = {
+        "slam": PageDisplaySettings(
+            cloud=CloudSettings(size_unit="meters", size=0.5),
+        ),
+    }
+    save_yaml(path, pages)
+    loaded = load_yaml(path)
+    assert loaded["slam"].cloud.size_unit == "meters"
+    assert loaded["slam"].cloud.size == 0.5
+
+
+def test_cloud_size_unit_unknown_value_passes_through():
+    # The dataclass holds the string verbatim; PyVistaView treats anything
+    # other than "meters" as "pixels" (Task 6). Codec must not coerce.
+    s = settings_from_dict({"cloud": {"size_unit": "weird"}})
+    assert s.cloud.size_unit == "weird"
+
+
+def test_image_splitter_state_default():
+    s = ImageLayoutSettings()
+    assert s.splitter_state == ""
+
+
+def test_image_splitter_state_yaml_roundtrip(tmp_path: Path):
+    path = tmp_path / "settings.yaml"
+    pages = {
+        "image": PageDisplaySettings(
+            image=ImageLayoutSettings(
+                layout="2x2",
+                splitter_state="AAABAAAA...==",
+            ),
+        ),
+    }
+    save_yaml(path, pages)
+    loaded = load_yaml(path)
+    assert loaded["image"].image.splitter_state == "AAABAAAA...=="

@@ -24,6 +24,9 @@ def test_panel_change_propagates_to_view(qtbot, tmp_path):
     store.changed.connect(
         lambda k, settings: view.apply_display_settings(settings))
 
+    # Force pixels mode so GetPointSize remains the source of truth (in
+    # meters mode the actor uses vtkPointGaussianMapper.GetScaleFactor).
+    store.update("slam", "cloud.size_unit", "pixels")
     snapshot = store.get("slam")
     view.apply_display_settings(snapshot)
     panel.apply_values(snapshot)
@@ -52,6 +55,8 @@ def test_reset_propagates_to_view(qtbot, tmp_path):
     store.changed.connect(
         lambda k, s: (view.apply_display_settings(s), panel.apply_values(s)))
 
+    # Pin pixels mode so GetPointSize stays meaningful through reset.
+    store.update("slam", "cloud.size_unit", "pixels")
     panel.apply_values(store.get("slam"))
     panel._widgets["cloud.size"].setValue(15.0)
     qtbot.wait(260)
@@ -64,4 +69,7 @@ def test_reset_propagates_to_view(qtbot, tmp_path):
     # the click() call. No qtbot.wait needed; the assertion guards future
     # regressions where reset accidentally becomes async.
     panel._reset_button.click()
-    assert view._cloud_actor.GetProperty().GetPointSize() == 2.0
+    # Default is now size_unit=meters / size=2.0, so the actor flips to
+    # vtkPointGaussianMapper; verify ScaleFactor instead of GetPointSize.
+    mapper = view._cloud_actor.GetMapper()
+    assert mapper.GetScaleFactor() == 2.0

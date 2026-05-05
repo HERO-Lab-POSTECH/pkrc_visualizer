@@ -1,4 +1,4 @@
-"""rqt_image_view 스타일 토픽 콤보 — prefix 자동완성 + topic_selected 시그널."""
+"""rqt_image_view-style topic combo: prefix autocomplete + topic_selected signal."""
 from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtWidgets import QComboBox, QCompleter
 
@@ -10,7 +10,7 @@ class TopicComboBox(QComboBox):
         super().__init__(parent)
         self.setEditable(True)
         self.setInsertPolicy(QComboBox.NoInsert)
-        self.lineEdit().setPlaceholderText("타입 입력 또는 ▼")
+        self.lineEdit().setPlaceholderText("Topic name")
         completer = QCompleter([], self)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchStartsWith)
@@ -33,6 +33,6 @@ class TopicComboBox(QComboBox):
         self.blockSignals(False)
 
     def _on_text_changed(self, text: str) -> None:
-        # 자동완성 popup 클릭 또는 사용자 직접 입력 후 Enter — 둘 다 후보에 있을 때만
+        # Popup click or user-typed Enter; emit only if the value matches a candidate.
         if text and self.findText(text) >= 0:
             self.topic_selected.emit(text)

@@ -18,14 +18,26 @@ def test_frames_schema_covers_all_dataclass_fields():
 
 def test_cloud_schema_with_decay():
     paths = {f.path for f in cloud_schema(include_decay=True)}
-    assert "cloud.decay_max_points" in paths
+    assert "cloud.decay_seconds" in paths
     assert "cloud.style" in paths
+    assert "cloud.size_unit" in paths
     assert "cloud.color_transformer" in paths
 
 
 def test_cloud_schema_without_decay():
     paths = {f.path for f in cloud_schema(include_decay=False)}
-    assert "cloud.decay_max_points" not in paths
+    assert "cloud.decay_seconds" not in paths
+    # size_unit stays in even when decay is disabled.
+    assert "cloud.size_unit" in paths
+
+
+def test_cloud_size_allows_sub_meter_resolution():
+    # meters mode (vtkPointGaussianMapper.SetScaleFactor in world units)
+    # needs sub-1.0 splat sizes; pixels mode can stay at integer steps.
+    spec = next(f for f in cloud_schema(include_decay=True)
+                if f.path == "cloud.size")
+    assert spec.options["min"] <= 0.01
+    assert spec.options["step"] <= 0.1
 
 
 def test_background_schema():
@@ -59,14 +71,16 @@ def _make_panel(qtbot, include_decay=True):
 
 def test_panel_builds_widget_per_field(qtbot):
     _, panel = _make_panel(qtbot, include_decay=True)
-    # frames(9) + cloud(8 with decay) + background(1)
-    assert len(panel._widgets) == 18
+    # frames(9) + cloud(9 with decay+size_unit) + background(1)
+    assert len(panel._widgets) == 19
+    assert "cloud.size_unit" in panel._widgets
 
 
 def test_panel_omits_decay_when_disabled(qtbot):
     _, panel = _make_panel(qtbot, include_decay=False)
-    assert "cloud.decay_max_points" not in panel._widgets
-    assert len(panel._widgets) == 17
+    assert "cloud.decay_seconds" not in panel._widgets
+    assert "cloud.size_unit" in panel._widgets
+    assert len(panel._widgets) == 18
 
 
 def test_apply_values_syncs_widget_state(qtbot):
@@ -115,14 +129,14 @@ def test_toggle_shows_and_hides(qtbot):
 from pkrc_visualizer.widgets.settings_button import SettingsButton
 
 
-def test_settings_button_anchors_bottom_left(qtbot):
+def test_settings_button_anchors_bottom_right(qtbot):
     parent = QWidget()
     parent.resize(800, 600)
     qtbot.addWidget(parent)
     btn = SettingsButton(parent)
     parent.show()
     qtbot.waitExposed(parent)
-    assert btn.x() == 8                 # MARGIN_LEFT
+    assert btn.x() == 800 - 32 - 8      # width - BUTTON_SIZE - MARGIN_RIGHT
     assert btn.y() == 600 - 32 - 8      # height - BUTTON_SIZE - MARGIN_BOTTOM
 
 
