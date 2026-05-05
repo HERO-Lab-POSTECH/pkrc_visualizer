@@ -113,3 +113,48 @@ def test_v04_yaml_drops_legacy_keys(qtbot, tmp_path):
     docks = page._inner_mw.findChildren(QDockWidget)
     assert len(docks) == 1                              # one panel survives
     assert store.get("image").image.dock_state == ""    # legacy state ignored
+
+
+def test_tabify_persists(qtbot, tmp_path):
+    page, store = _build_page(qtbot, tmp_path)
+    for _ in range(2):
+        page._toolbar._add_btn.click()
+    docks = page._inner_mw.findChildren(QDockWidget)
+    page._inner_mw.tabifyDockWidget(docks[0], docks[1])
+    qtbot.wait(50)                       # let layout settle before saveState
+    page._persist()
+    qtbot.wait(80)
+    saved = store.get("image").image.dock_state
+    assert saved != ""
+
+    store2 = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=20)
+    page2 = ImagePage(_make_ros_client(), store2)
+    qtbot.addWidget(page2)
+    page2.resize(800, 600)
+    page2.show()
+    qtbot.waitExposed(page2)
+    docks2 = page2._inner_mw.findChildren(QDockWidget)
+    assert len(docks2) == 2
+    # Tabified docks share the same tab bar.
+    assert page2._inner_mw.tabifiedDockWidgets(docks2[0]) == [docks2[1]] or \
+           page2._inner_mw.tabifiedDockWidgets(docks2[1]) == [docks2[0]]
+
+
+def test_floating_persists(qtbot, tmp_path):
+    page, store = _build_page(qtbot, tmp_path)
+    page._toolbar._add_btn.click()
+    docks = page._inner_mw.findChildren(QDockWidget)
+    docks[0].setFloating(True)
+    page._persist()
+    qtbot.wait(80)
+    assert store.get("image").image.dock_state != ""
+
+    store2 = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=20)
+    page2 = ImagePage(_make_ros_client(), store2)
+    qtbot.addWidget(page2)
+    page2.resize(800, 600)
+    page2.show()
+    qtbot.waitExposed(page2)
+    docks2 = page2._inner_mw.findChildren(QDockWidget)
+    assert len(docks2) == 1
+    assert docks2[0].isFloating()
