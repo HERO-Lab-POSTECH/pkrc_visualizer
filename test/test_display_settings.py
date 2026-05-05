@@ -123,33 +123,9 @@ def test_store_unknown_path_raises(tmp_path, qtbot):
         store.update("slam", "cloud.nope", 1)
 
 
-def test_image_layout_defaults():
+def test_image_layout_panels_default():
     s = ImageLayoutSettings()
-    assert s.layout == "2x2"
     assert s.panels == []
-
-
-def test_image_layout_yaml_roundtrip(tmp_path: Path):
-    path = tmp_path / "settings.yaml"
-    pages = {
-        "image": PageDisplaySettings(
-            image=ImageLayoutSettings(
-                layout="3x2",
-                panels=[
-                    ImagePanelSettings(
-                        topic_name="/cam/raw", msg_type="Image"),
-                    ImagePanelSettings(
-                        topic_name="/cam/compressed", msg_type="CompressedImage"),
-                ],
-            ),
-        ),
-    }
-    save_yaml(path, pages)
-    loaded = load_yaml(path)
-    assert loaded["image"].image.layout == "3x2"
-    assert len(loaded["image"].image.panels) == 2
-    assert loaded["image"].image.panels[0].topic_name == "/cam/raw"
-    assert loaded["image"].image.panels[1].msg_type == "CompressedImage"
 
 
 def test_image_dict_non_dict_falls_back_to_defaults():
@@ -162,7 +138,6 @@ def test_image_panels_non_dict_entries_skipped():
     # Forward-compat: future versions may emit non-dict entries — drop them.
     s = settings_from_dict({
         "image": {
-            "layout": "2x2",
             "panels": [
                 {"topic_name": "/a", "msg_type": "Image"},
                 "not_a_dict",
@@ -232,21 +207,47 @@ def test_cloud_size_unit_unknown_value_passes_through():
     assert s.cloud.size_unit == "weird"
 
 
-def test_image_splitter_state_default():
-    s = ImageLayoutSettings()
-    assert s.splitter_state == ""
+def test_image_layout_settings_default_dock_state():
+    s = PageDisplaySettings()
+    assert s.image.dock_state == ""
+    assert s.image.panels == []
+    # Removed in v0.5.0:
+    assert not hasattr(s.image, "layout")
+    assert not hasattr(s.image, "splitter_state")
 
 
-def test_image_splitter_state_yaml_roundtrip(tmp_path: Path):
+def test_image_dock_state_yaml_roundtrip(tmp_path: Path):
     path = tmp_path / "settings.yaml"
     pages = {
         "image": PageDisplaySettings(
             image=ImageLayoutSettings(
-                layout="2x2",
-                splitter_state="AAABAAAA...==",
+                dock_state="aGVsbG8=",  # arbitrary base64 ASCII
+                panels=[ImagePanelSettings(topic_name="/foo", msg_type="Image")],
             ),
         ),
     }
     save_yaml(path, pages)
     loaded = load_yaml(path)
-    assert loaded["image"].image.splitter_state == "AAABAAAA...=="
+    assert loaded["image"].image.dock_state == "aGVsbG8="
+    assert loaded["image"].image.panels[0].topic_name == "/foo"
+
+
+def test_image_legacy_keys_drop_silently(tmp_path: Path):
+    # v0.4.0 yaml had layout + splitter_state. v0.5.0 must not crash.
+    path = tmp_path / "settings.yaml"
+    path.write_text(
+        "image:\n"
+        "  image:\n"
+        "    layout: '2x2'\n"
+        "    splitter_state: 'foo;bar'\n"
+        "    panels:\n"
+        "      - topic_name: '/legacy'\n"
+        "        msg_type: 'Image'\n"
+    )
+    loaded = load_yaml(path)
+    assert loaded["image"].image.dock_state == ""
+    assert loaded["image"].image.panels[0].topic_name == "/legacy"
+    # legacy keys must not have leaked through:
+    assert not hasattr(loaded["image"].image, "layout")
+    assert not hasattr(loaded["image"].image, "splitter_state")
+

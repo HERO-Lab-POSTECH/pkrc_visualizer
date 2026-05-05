@@ -47,9 +47,11 @@ class ImagePanelSettings:
 
 @dataclass
 class ImageLayoutSettings:
-    layout: str = "2x2"               # "1x1" | "2x1" | "2x2" | "3x2" | "free"
     panels: list[ImagePanelSettings] = field(default_factory=list)
-    splitter_state: str = ""          # serialized splitter sizes ("outer_csv; row0_csv; row1_csv"); "" = no restore
+    # base64(QMainWindow.saveState()) — see pages/image_page.py.
+    # Empty string = first launch / migration / corrupted: fall back to default
+    # left-to-right horizontal dock arrangement.
+    dock_state: str = ""
 
 
 @dataclass
