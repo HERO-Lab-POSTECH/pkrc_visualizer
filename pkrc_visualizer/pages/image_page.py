@@ -123,9 +123,9 @@ class ImagePage(BasePage):
             lambda topic, p=panel: self._on_panel_topic(p, topic))
 
         dock = QDockWidget()
-        obj_name = ps.object_name or _new_object_name()
-        dock.setObjectName(obj_name)
-        ps.object_name = obj_name  # cache for next persist
+        # _persist re-reads dock.objectName() directly, so caching back into
+        # ps would mutate the caller's input without observable effect.
+        dock.setObjectName(ps.object_name or _new_object_name())
         dock.setFeatures(DOCK_FEATURES)
         dock.setWidget(panel)
         close_cb = lambda d=dock, p=panel: self._remove_dock(d, p)
