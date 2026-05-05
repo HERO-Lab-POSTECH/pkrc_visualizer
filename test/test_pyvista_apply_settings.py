@@ -70,6 +70,35 @@ def test_apply_cloud_z_transformer_attaches_scalar(view):
     assert rng == (-2.0, 2.0)
 
 
+def test_meters_mode_attaches_style_specific_splat_shader(view):
+    """vtkPointGaussianMapper must carry a per-style fragment shader.
+
+    Without an explicit SetSplatShaderCode, the default leaves the quad
+    sprite outline visible (the "white square around a gaussian disc"
+    artefact). Each style now ships its own GLSL with a discard outside
+    the unit disc/box so the quad never bleeds.
+    """
+    import vtk
+    cases = [
+        ("points",  "exp("),
+        ("square",  "max(abs"),
+        ("spheres", "diffuse"),
+    ]
+    for style, signature in cases:
+        s = PageDisplaySettings(cloud=CloudSettings(
+            size_unit="meters", style=style, size=0.05))
+        view.apply_display_settings(s)
+        mapper = view._cloud_actor.GetMapper()
+        assert isinstance(mapper, vtk.vtkPointGaussianMapper)
+        code = mapper.GetSplatShaderCode()
+        assert "discard" in code, f"{style} shader must discard outside sprite"
+        assert signature in code, f"{style} shader missing distinguishing token"
+        # Some VTK builds omit Set/GetTriangleScale; the shader's discard
+        # already enforces a clean splat, so just assert when available.
+        if hasattr(mapper, "GetTriangleScale"):
+            assert mapper.GetTriangleScale() == 1.0
+
+
 def test_apply_cloud_decay_seconds_takes_effect(view, monkeypatch):
     # Apply a 1-second decay window.
     s = PageDisplaySettings(cloud=CloudSettings(decay_seconds=1.0))
