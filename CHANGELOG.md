@@ -1,5 +1,93 @@
 # Changelog
 
+## [0.5.0] — 2026-05-05 — rqt-style Image Page
+
+### Removed
+- `ImageLayoutSettings.layout` and `ImageLayoutSettings.splitter_state`
+  fields. v0.4.0 yaml files keep their `panels` list; the two removed
+  keys are silently dropped via `_filter_known`.
+- `ImageToolbar` layout combobox + `layout_changed` signal +
+  `set_layout_value`. Layout presets (`1x1` / `2x1` / `2x2` / `3x2` /
+  `free`) no longer exist as a UI choice.
+- `test/test_image_page_splitter.py` (replaced by
+  `test/test_image_page_dock.py`).
+
+### Added
+- `ImageLayoutSettings.dock_state: str` — base64-encoded
+  `QMainWindow.saveState()` capturing the full dock geometry (positions,
+  splits, tabs, floating windows).
+- `ImagePanelSettings.object_name: str` — stable `panel_<uuid>` id so
+  `restoreState` re-attaches the same dock between sessions (otherwise
+  every spawn would generate a fresh uuid and tabify/floating state
+  would be lost on reload).
+- `ImagePage` now hosts an inner `QMainWindow`. Each panel is a
+  `QDockWidget(panel_<uuid4>)` with `Movable | Floatable | Closable`
+  features. Users drag dock headers to relocate, tabify, or float —
+  rqt parity.
+- `ImagePanel.make_titlebar(close_cb)` factory returns a single-line
+  `QWidget` (combobox + Hz label + ✕) that the dock installs as
+  `setTitleBarWidget`. The panel body is purely the `ImageView`.
+- `_DockCloseFilter(QObject)` event filter intercepts `QEvent.Close` so
+  both the titlebar ✕ and programmatic `dock.close()` route through the
+  same panel-removal path.
+- `test/test_image_page_dock.py` — 7 tests covering default empty,
+  add viewer, horizontal split, close → remove, dock_state roundtrip,
+  tabify/float persistence, legacy yaml drop.
+- `test/test_migration_v04_to_v05.py` — explicit v0.4.0 → v0.5.0 yaml
+  migration coverage (legacy keys dropped on load + on subsequent save).
+
+### Changed
+- First-run UX: ImagePage is empty (no auto-spawned panels). Users
+  click "+ Add Viewer" in the toolbar to create the first dock.
+- `ImagePanel` no longer carries an inline header. Combobox / Hz /
+  close live exclusively inside the dock title bar.
+- `ImageToolbar` reduced to a single Add Viewer button +
+  `add_viewer_clicked` signal.
+
+### Fixed
+- ImagePage panel ✕ button now actually removes the panel. The
+  titlebar close button is wired to `dock.close()` so both the
+  user-clicked path and the programmatic `dock.close()` path go
+  through the same `QEvent.Close` filter, and the close-handler
+  lambda is pinned to the dock so its lifetime survives PyQt5's
+  weak-ref edge cases on `QPushButton.clicked.connect`.
+- `cloud.size_unit` toggle no longer freezes the GPU. The clamp lives
+  in two layers: `SettingsPanel` snaps the size slider visually when
+  the user toggles the unit combobox, and `DisplaySettingsStore.update`
+  re-applies the clamp atomically inside the same transaction so the
+  view never receives a stale (size_unit, size) pair while the panel's
+  two debounce timers are still settling. Prior to the store-layer
+  guard, the size_unit signal usually beat the size signal to the view
+  and `vtkPointGaussianMapper` briefly painted a 10 m splat that froze
+  the GPU.
+- `cloud.style` (`points` / `square` / `spheres`) now affects
+  meters-mode splats. `vtkPointGaussianMapper` receives an explicit
+  `SetSplatShaderCode` per style with a `discard` outside the unit
+  disc/box, removing the "white square outline around a gaussian
+  disc" artefact that appeared with the default splat shader.
+  `SetTriangleScale(1.0)` is applied when the VTK build exposes it,
+  so the visible splat radius equals `cloud.size` literally.
+
+### Verification
+- `python3 -m pytest test/ -q` PASS (96 tests, +12 from v0.4.0).
+- `colcon build --symlink-install --packages-select pkrc_visualizer`
+  PASS.
+- Manual smoke on `7_ucrc_watertank/m3000d-range10-tilt90` bag pending
+  (PR description tracks).
+
+### Notes
+- **One-time layout reset for v0.4.0 users.** When v0.5.0 first opens
+  an existing `~/.config/pkrc_visualizer/display_settings.yaml`,
+  panels are recreated in a default left-to-right horizontal row (the
+  saved `splitter_state` is dropped). User drags to taste, then the
+  new `dock_state` persists.
+- `PyVistaView.__init__` (94 LOC) remains over the 50-LOC limit. This
+  was flagged as a v0.4.0 cleanup follow-up and is unchanged by v0.5.0
+  scope (ImagePage redesign). Defer to a dedicated PyVistaView
+  refactor.
+- Perspective save/load (multiple named layouts), cross-page docking,
+  and "undo close" are deferred — see spec Out of Scope.
+
 ## [0.4.0] — 2026-05-04 — Cloud rendering & layout polish
 
 ### Added

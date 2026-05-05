@@ -43,13 +43,16 @@ class CloudSettings:
 class ImagePanelSettings:
     topic_name: str = ""
     msg_type: str = "Image"  # "Image" | "CompressedImage"
+    object_name: str = ""    # QDockWidget objectName for restoreState matching
 
 
 @dataclass
 class ImageLayoutSettings:
-    layout: str = "2x2"               # "1x1" | "2x1" | "2x2" | "3x2" | "free"
     panels: list[ImagePanelSettings] = field(default_factory=list)
-    splitter_state: str = ""          # serialized splitter sizes ("outer_csv; row0_csv; row1_csv"); "" = no restore
+    # base64(QMainWindow.saveState()) — see pages/image_page.py.
+    # Empty string = first launch / migration / corrupted: fall back to default
+    # left-to-right horizontal dock arrangement.
+    dock_state: str = ""
 
 
 @dataclass
@@ -137,6 +140,24 @@ from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 
 DEFAULT_PATH = Path.home() / ".config" / "pkrc_visualizer" / "display_settings.yaml"
 
+# Atomic cross-field guard: when size_unit flips, the stale size value
+# from the previous unit might be 6 orders of magnitude off in the new
+# one (e.g. 10 px -> 10 m splat radius). Without clamping inside the
+# same store transaction, the panel-side debounce delivers the
+# size_unit change first and the view briefly paints a giant splat
+# that freezes the GPU before the size update arrives.
+SIZE_UNIT_THRESHOLD = 1.0
+SAFE_SIZE_FOR_PIXELS = 2.0
+SAFE_SIZE_FOR_METERS = 0.05
+
+
+def _safe_size_for_unit(unit: str, current: float) -> float:
+    if unit == "meters" and current > SIZE_UNIT_THRESHOLD:
+        return SAFE_SIZE_FOR_METERS
+    if unit == "pixels" and current < SIZE_UNIT_THRESHOLD:
+        return SAFE_SIZE_FOR_PIXELS
+    return current
+
 
 class DisplaySettingsStore(QObject):
     """Qt-aware in-memory settings cache with debounced YAML persistence."""
@@ -165,6 +186,8 @@ class DisplaySettingsStore(QObject):
         if not hasattr(obj, last):
             raise KeyError(f"unknown setting: {page_key}.{path}")
         setattr(obj, last, value)
+        if path == "cloud.size_unit":
+            page.cloud.size = _safe_size_for_unit(value, page.cloud.size)
         self.changed.emit(page_key, page)
         self._save_timer.start()
 

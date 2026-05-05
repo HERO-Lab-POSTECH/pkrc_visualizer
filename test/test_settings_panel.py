@@ -115,6 +115,36 @@ def test_reset_button_emits_current_tab(qtbot):
     assert spy[0][0] == "cloud"
 
 
+def test_size_unit_toggle_clamps_oversized_meters(qtbot):
+    """pixel-mode value > 1.0 must drop to a sane meters default on switch."""
+    _, panel = _make_panel(qtbot)
+    panel._widgets["cloud.size_unit"].setCurrentText("pixels")
+    panel._widgets["cloud.size"].setValue(10.0)            # pixels-mode value
+    panel._widgets["cloud.size_unit"].setCurrentText("meters")
+    assert panel._widgets["cloud.size"].value() == 0.05
+
+
+def test_size_unit_toggle_clamps_undersized_pixels(qtbot):
+    """meters-mode value < 1.0 must rise to a visible pixels default."""
+    _, panel = _make_panel(qtbot)
+    # default combobox index is the first choice ("pixels"); flip to
+    # "meters" first so the subsequent change to "pixels" actually fires
+    # currentTextChanged.
+    panel._widgets["cloud.size_unit"].setCurrentText("meters")
+    panel._widgets["cloud.size"].setValue(0.05)            # meters-mode value
+    panel._widgets["cloud.size_unit"].setCurrentText("pixels")
+    assert panel._widgets["cloud.size"].value() == 2.0
+
+
+def test_size_unit_toggle_keeps_safe_value(qtbot):
+    """A value already on the right side of the threshold must not move."""
+    _, panel = _make_panel(qtbot)
+    panel._widgets["cloud.size_unit"].setCurrentText("pixels")
+    panel._widgets["cloud.size"].setValue(0.5)             # already <= threshold
+    panel._widgets["cloud.size_unit"].setCurrentText("meters")
+    assert panel._widgets["cloud.size"].value() == 0.5
+
+
 def test_toggle_shows_and_hides(qtbot):
     parent, panel = _make_panel(qtbot)
     parent.show()

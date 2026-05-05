@@ -20,6 +20,47 @@ from pyvistaqt import QtInteractor
 pv.global_theme.allow_empty_mesh = True
 
 
+# vtkPointGaussianMapper splat shaders, parameterised by cloud.style.
+# All three discard fragments outside the unit disc/box so the quad
+# sprite outline is never visible (this fixes the "white square around
+# a gaussian disc" artefact users see when SetSplatShaderCode is left
+# at the default).
+#
+# Used together with SetTriangleScale(1.0): the sprite spans [-1, 1]
+# and the shader draws inside that range. ScaleFactor (=cloud.size)
+# therefore acts as the actual world-unit splat radius.
+_SPLAT_SHADER_GAUSSIAN = (
+    "//VTK::Color::Impl\n"
+    "float dist2 = dot(offsetVCVSOutput.xy, offsetVCVSOutput.xy);\n"
+    "if (dist2 > 1.0) { discard; }\n"
+    "float scale = exp(-dist2 * 4.0);\n"
+    "ambientColor *= scale;\n"
+    "diffuseColor *= scale;\n"
+)
+
+_SPLAT_SHADER_SQUARE = (
+    "//VTK::Color::Impl\n"
+    "float maxc = max(abs(offsetVCVSOutput.x), abs(offsetVCVSOutput.y));\n"
+    "if (maxc > 1.0) { discard; }\n"
+)
+
+_SPLAT_SHADER_SPHERE = (
+    "//VTK::Color::Impl\n"
+    "float dist2 = dot(offsetVCVSOutput.xy, offsetVCVSOutput.xy);\n"
+    "if (dist2 > 1.0) { discard; }\n"
+    "float z = sqrt(1.0 - dist2);\n"
+    "float diffuse = 0.3 + 0.7 * z;\n"
+    "ambientColor *= diffuse;\n"
+    "diffuseColor *= diffuse;\n"
+)
+
+_SPLAT_SHADERS = {
+    "points": _SPLAT_SHADER_GAUSSIAN,
+    "square": _SPLAT_SHADER_SQUARE,
+    "spheres": _SPLAT_SHADER_SPHERE,
+}
+
+
 def _set_caption_text_color(caption_actor, rgb):
     prop = caption_actor.GetCaptionTextProperty()
     prop.SetColor(*rgb)
@@ -388,6 +429,16 @@ class PyVistaView(QWidget):
             prop.SetRenderPointsAsSpheres(
                 c.style == "spheres" and c.size_unit == "pixels")
             mapper = actor.GetMapper()
+            if isinstance(mapper, vtk.vtkPointGaussianMapper):
+                # Pixels-mode style flags above are no-ops on a gaussian
+                # mapper, so we route style through SetSplatShaderCode
+                # instead. The discard-at-dist2>1.0 cutoff makes the
+                # visible splat radius equal ScaleFactor (=cloud.size)
+                # regardless of the sprite quad size that VTK chose.
+                mapper.SetSplatShaderCode(
+                    _SPLAT_SHADERS.get(c.style, _SPLAT_SHADER_GAUSSIAN))
+                if hasattr(mapper, "SetTriangleScale"):
+                    mapper.SetTriangleScale(1.0)
             if c.color_transformer in ("flat", "intensity"):
                 # "intensity" is reserved — no PointCloud2 intensity plumbing yet,
                 # so it renders as flat color until the data path lands.

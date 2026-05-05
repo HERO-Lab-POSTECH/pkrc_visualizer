@@ -19,6 +19,14 @@ PANEL_MAX_HEIGHT = 520
 ANIMATION_MS = 240
 DEBOUNCE_MS = 200
 
+# Cross-mode safe defaults for cloud.size when the user toggles size_unit.
+# Values that make sense in pixels are 6 orders of magnitude off in meters
+# (and vice versa), so vtkPointGaussianMapper would otherwise paint giant
+# splats and freeze the GPU. The threshold splits the two regimes.
+SIZE_UNIT_SAFE_THRESHOLD = 1.0
+SAFE_SIZE_PIXELS = 2.0
+SAFE_SIZE_METERS = 0.05
+
 
 def _is_light_color(hex_color: str) -> bool:
     """Return True if a `#rrggbb` color is light enough to need dark text."""
@@ -179,8 +187,28 @@ class SettingsPanel(QFrame):
                 w.addItem(choice)
             w.currentTextChanged.connect(
                 lambda v, p=spec.path: self._emit(p, v))
+            if spec.path == "cloud.size_unit":
+                w.currentTextChanged.connect(self._guard_size_on_unit_change)
             return w
         raise ValueError(f"unknown widget kind: {spec.widget}")
+
+    def _guard_size_on_unit_change(self, new_unit: str) -> None:
+        """Clamp cloud.size when the user toggles between pixels/meters.
+
+        Without this guard, a pixel-mode size of e.g. 10 carries over to
+        meters mode as a 10-metre splat radius, which paints quads
+        covering most of the viewport via vtkPointGaussianMapper and
+        freezes the GPU. The clamp re-emits via the size widget's normal
+        valueChanged path, so the store sees a single coherent update.
+        """
+        size_widget = self._widgets.get("cloud.size")
+        if size_widget is None:
+            return
+        current = size_widget.value()
+        if new_unit == "meters" and current > SIZE_UNIT_SAFE_THRESHOLD:
+            size_widget.setValue(SAFE_SIZE_METERS)
+        elif new_unit == "pixels" and current < SIZE_UNIT_SAFE_THRESHOLD:
+            size_widget.setValue(SAFE_SIZE_PIXELS)
 
     # ---- value sync -------------------------------------------------
     @staticmethod
