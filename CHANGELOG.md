@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] — v0.5.0 — rqt-style Image Page (in progress)
+
+### Removed
+- _filled in by Task 10_
+
+### Added
+- _filled in by Task 10_
+
+### Notes
+- _filled in by Task 10_
+
 ## [0.4.0] — 2026-05-04 — Cloud rendering & layout polish
 
 ### Added
