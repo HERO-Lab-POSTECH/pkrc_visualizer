@@ -1,8 +1,16 @@
-"""Image page: dynamic panel grid with nested QSplitter support. v0.4.0."""
+"""ImagePage v0.5.0: rqt-style QDockWidget layout.
+
+ImagePage hosts an inner QMainWindow inside a QWidget so we can use
+QDockWidget's drag/dock/tabify/float behavior without making the whole
+visualizer page a QMainWindow.
+"""
+from __future__ import annotations
+import base64
+import uuid
 from typing import Optional
 
-from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtWidgets import QGridLayout, QSplitter, QVBoxLayout, QWidget
+from PyQt5.QtCore import QByteArray, QEvent, QObject, Qt, QTimer
+from PyQt5.QtWidgets import QDockWidget, QMainWindow, QVBoxLayout, QWidget
 from sensor_msgs.msg import CompressedImage, Image
 
 from pkrc_visualizer.display_settings import (
@@ -14,76 +22,189 @@ from pkrc_visualizer.widgets.image_toolbar import ImageToolbar
 
 
 PAGE_KEY = "image"
-LAYOUT_GRID = {
-    "1x1": (1, 1), "2x1": (1, 2),
-    "2x2": (2, 2), "3x2": (2, 3),
-    "free": (2, 2),  # In free mode the grid still falls back to a 2x2 layout.
-}
 MSG_TYPE_MAP = {"Image": Image, "CompressedImage": CompressedImage}
+DOCK_FEATURES = (
+    QDockWidget.DockWidgetMovable
+    | QDockWidget.DockWidgetFloatable
+    | QDockWidget.DockWidgetClosable
+)
+
+
+class _DockCloseFilter(QObject):
+    """Event filter installed on QDockWidget to intercept close events."""
+
+    def __init__(self, callback, parent=None):
+        super().__init__(parent)
+        self._callback = callback
+
+    def eventFilter(self, obj, event: QEvent) -> bool:
+        if event.type() == QEvent.Close:
+            self._callback()
+            return True  # consume the event
+        return False
+
+
+def _new_object_name() -> str:
+    return "panel_" + uuid.uuid4().hex
+
+
+def _encode_state(state: QByteArray) -> str:
+    return base64.b64encode(bytes(state)).decode("ascii")
+
+
+def _decode_state(s: str) -> Optional[QByteArray]:
+    if not s:
+        return None
+    try:
+        return QByteArray(base64.b64decode(s.encode("ascii")))
+    except (ValueError, UnicodeError):
+        return None
 
 
 class ImagePage(BasePage):
-    def __init__(self, ros_client, display_store: DisplaySettingsStore, parent=None) -> None:
+    def __init__(self, ros_client, display_store: DisplaySettingsStore,
+                 parent=None) -> None:
         super().__init__(ros_client, parent)
         self._store = display_store
-        self._panels: list[ImagePanel] = []
+        self._panels: list[tuple[QDockWidget, ImagePanel]] = []
         self._panel_topic_ids: dict[ImagePanel, Optional[str]] = {}
         self._topic_pool: list[str] = []
+        self._restored: bool = False
+        self._restoring: bool = False
 
-        self._splitter_restored: bool = False
         self._build_ui()
         self._wire_signals()
         ros_client.enable_discovery([Image, CompressedImage])
-        self._restore_from_store(display_store.get(PAGE_KEY).image)
 
     def _build_ui(self) -> None:
         self._toolbar = ImageToolbar()
-        self._container = QWidget()
-        self._container_layout = QVBoxLayout(self._container)
-        self._container_layout.setContentsMargins(0, 0, 0, 0)
-        self._splitter: Optional[QSplitter] = None
-        # Free-mode and 1x1 keep a grid widget around as a fallback.
-        self._grid_widget = QWidget()
-        self._grid = QGridLayout(self._grid_widget)
-        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._inner_mw = QMainWindow()
+        self._inner_mw.setCentralWidget(QWidget())
+        self._inner_mw.centralWidget().hide()
+        self._inner_mw.setDockNestingEnabled(True)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._toolbar)
-        outer.addWidget(self._container, 1)
-
-    def showEvent(self, event: QEvent) -> None:
-        super().showEvent(event)
-        # Restore splitter positions after layout has been finalized.
-        # setSizes() must run after the splitter is visible so the container
-        # has assigned a real size to it; doing it here is reliable.
-        # Guard against re-firing on hide/show cycles overwriting user drags.
-        if self._splitter is not None and not self._splitter_restored:
-            self._restore_splitter_state()
+        outer.addWidget(self._inner_mw, 1)
 
     def _wire_signals(self) -> None:
-        self._toolbar.add_viewer_clicked.connect(self._add_panel)
-        self._toolbar.layout_changed.connect(self._on_layout_changed)
+        self._toolbar.add_viewer_clicked.connect(self._on_add_viewer)
         self._ros_client.topics_changed.connect(self._on_topics_changed)
 
-    def _restore_from_store(self, layout: ImageLayoutSettings) -> None:
-        # Disconnect layout_changed while restoring to avoid a spurious reflow.
-        self._toolbar.layout_changed.disconnect(self._on_layout_changed)
-        self._toolbar.set_layout_value(layout.layout)
-        self._toolbar.layout_changed.connect(self._on_layout_changed)
-        for ps in layout.panels:
-            panel = self._add_panel()
-            if ps.topic_name:
-                msg_type = MSG_TYPE_MAP.get(ps.msg_type, Image)
-                tid = self._ros_client.subscribe_dynamic(ps.topic_name, msg_type)
-                self._panel_topic_ids[panel] = tid
-                panel._combo.blockSignals(True)
-                panel._combo.set_candidates(
-                    sorted(set(self._topic_pool + [ps.topic_name])))
-                panel._combo.setCurrentText(ps.topic_name)
-                panel._combo.blockSignals(False)
-        self._reflow()
+    # ---- showEvent: restore on first visibility ---------------------------
+    def showEvent(self, event: QEvent) -> None:
+        super().showEvent(event)
+        if not self._restored:
+            self._restore_from_store(self._store.get(PAGE_KEY).image)
+            self._restored = True
 
+    # ---- restore ----------------------------------------------------------
+    def _restore_from_store(self, settings: ImageLayoutSettings) -> None:
+        # Recreate panels first so QMainWindow.restoreState can match them
+        # by objectName. Guard _restoring to prevent any _persist calls.
+        self._restoring = True
+        for ps in settings.panels:
+            self._spawn_panel(ps, persist=False)
+        state = _decode_state(settings.dock_state)
+        if state is not None:
+            self._inner_mw.restoreState(state)
+        self._restoring = False
+
+    # ---- add / spawn ------------------------------------------------------
+    def _on_add_viewer(self) -> None:
+        ps = ImagePanelSettings()
+        self._spawn_panel(ps, persist=True)
+
+    def _spawn_panel(self, ps: ImagePanelSettings, persist: bool) -> None:
+        panel = ImagePanel()
+        panel.set_topic_candidates(self._topic_pool)
+        panel.topic_changed.connect(
+            lambda topic, p=panel: self._on_panel_topic(p, topic))
+
+        dock = QDockWidget()
+        dock.setObjectName(_new_object_name())
+        dock.setFeatures(DOCK_FEATURES)
+        dock.setWidget(panel)
+        close_cb = lambda d=dock, p=panel: self._remove_dock(d, p)
+        dock.setTitleBarWidget(panel.make_titlebar(close_cb=close_cb))
+        # Install event filter to catch dock.close() in addition to titlebar ✕.
+        _filter = _DockCloseFilter(close_cb, parent=dock)
+        dock.installEventFilter(_filter)
+        dock.dockLocationChanged.connect(self._persist)
+
+        if self._panels:
+            prev_dock = self._panels[-1][0]
+            self._inner_mw.splitDockWidget(prev_dock, dock, Qt.Horizontal)
+        else:
+            self._inner_mw.addDockWidget(Qt.RightDockWidgetArea, dock)
+
+        self._panels.append((dock, panel))
+        self._panel_topic_ids[panel] = None
+        if ps.topic_name:
+            panel._combo.setCurrentText(ps.topic_name)
+        if persist:
+            self._persist()
+
+    # ---- close ------------------------------------------------------------
+    def _remove_dock(self, dock: QDockWidget, panel: ImagePanel) -> None:
+        """Called by titlebar ✕ button. Removes the dock unconditionally."""
+        if dock not in [d for d, _ in self._panels]:
+            return
+        sub_id = self._panel_topic_ids.pop(panel, None)
+        if sub_id:
+            self._ros_client.unsubscribe(sub_id)
+        self._panels = [(d, p) for d, p in self._panels if d is not dock]
+        self._inner_mw.removeDockWidget(dock)
+        dock.setParent(None)
+        dock.deleteLater()
+        self._persist()
+
+    def _schedule_close_check(self, dock: QDockWidget, panel: ImagePanel,
+                              visible: bool) -> None:
+        """Handle visibilityChanged for floating-dock close fallback."""
+        if visible:
+            return
+        QTimer.singleShot(0, lambda: self._on_dock_visibility(dock, panel))
+
+    def _on_dock_visibility(self, dock: QDockWidget, panel: ImagePanel) -> None:
+        """Fallback close handler for when the dock window (floating) is dismissed."""
+        if dock.isVisible() or not dock.isFloating():
+            return
+        self._remove_dock(dock, panel)
+
+    # ---- topic pool / subscription ----------------------------------------
+    def _on_topics_changed(self, names) -> None:
+        if isinstance(names, dict):
+            self._topic_pool = sorted(names.keys())
+        else:
+            self._topic_pool = list(names)
+        for _, p in self._panels:
+            p.set_topic_candidates(self._topic_pool)
+
+    def _on_panel_topic(self, panel: ImagePanel, topic: str) -> None:
+        sub_id = self._panel_topic_ids.get(panel)
+        if sub_id:
+            self._ros_client.unsubscribe(sub_id)
+        new_id = self._ros_client.subscribe_dynamic(
+            topic, MSG_TYPE_MAP.get("Image", Image))
+        self._panel_topic_ids[panel] = new_id
+        self._persist()
+
+    # ---- persist ----------------------------------------------------------
+    def _persist(self, *_args) -> None:
+        if self._restoring:
+            return
+        snapshot = ImageLayoutSettings(
+            panels=[
+                ImagePanelSettings(topic_name=p.current_topic(), msg_type="Image")
+                for _, p in self._panels
+            ],
+            dock_state=_encode_state(self._inner_mw.saveState()),
+        )
+        self._store.update(PAGE_KEY, "image", snapshot)
+
+    # ---- message handling -------------------------------------------------
     def _is_my_topic(self, topic_id: str) -> bool:
         return any(tid == topic_id for tid in self._panel_topic_ids.values())
 
@@ -94,192 +215,3 @@ class ImagePage(BasePage):
             msg = self._latest.pop(tid, None)
             if msg is not None:
                 panel.set_image_msg(msg)
-
-    def _add_panel(self) -> ImagePanel:
-        panel = ImagePanel()
-        panel.set_topic_candidates(self._topic_pool)
-        panel.topic_changed.connect(
-            lambda name, p=panel: self._on_panel_topic_changed(p, name))
-        panel.closed.connect(lambda p=panel: self._remove_panel(p))
-        self._panels.append(panel)
-        self._panel_topic_ids[panel] = None
-        self._reflow()
-        self._persist()
-        return panel
-
-    def _remove_panel(self, panel: ImagePanel) -> None:
-        tid = self._panel_topic_ids.pop(panel, None)
-        if tid is not None:
-            self._ros_client.unsubscribe(tid)
-        self._panels.remove(panel)
-        panel.deleteLater()
-        self._reflow()
-        self._persist()
-
-    def _on_panel_topic_changed(self, panel: ImagePanel, name: str) -> None:
-        if name not in self._topic_pool:
-            return
-        # Drop the previous subscription, then subscribe to the new topic.
-        old_tid = self._panel_topic_ids.get(panel)
-        if old_tid is not None:
-            self._ros_client.unsubscribe(old_tid)
-        msg_type = self._infer_msg_type(name)
-        tid = self._ros_client.subscribe_dynamic(name, msg_type)
-        self._panel_topic_ids[panel] = tid
-        self._persist()
-
-    def _on_topics_changed(self, found: dict[str, str]) -> None:
-        self._topic_pool = sorted(found.keys())
-        for panel in self._panels:
-            panel.set_topic_candidates(self._topic_pool)
-        self._known_topic_types = found
-
-    def _infer_msg_type(self, topic_name: str) -> type:
-        type_str = getattr(self, "_known_topic_types", {}).get(topic_name, "")
-        if "CompressedImage" in type_str:
-            return CompressedImage
-        return Image
-
-    def _on_layout_changed(self, _value: str) -> None:
-        self._reflow()
-        self._persist()
-
-    def _reflow(self) -> None:
-        layout_id = self._toolbar._layout_combo.currentText()
-        # Detach all panels from any current parent before re-parenting.
-        for panel in self._panels:
-            panel.setParent(None)
-        self._teardown_container()
-        if layout_id == "free" or layout_id == "1x1":
-            self._reflow_into_grid(layout_id)
-        else:
-            self._reflow_into_splitter(layout_id)
-
-    def _teardown_container(self) -> None:
-        # Remove all children from container_layout so the next layout
-        # builds fresh widgets without leaking.
-        while self._container_layout.count():
-            item = self._container_layout.takeAt(0)
-            w = item.widget()
-            if w is not None and w is not self._grid_widget:
-                w.setParent(None)
-                w.deleteLater()
-        self._splitter = None
-
-    def _reflow_into_grid(self, layout_id: str) -> None:
-        for i in reversed(range(self._grid.count())):
-            self._grid.takeAt(i)
-        _, cols = LAYOUT_GRID.get(layout_id, (2, 2))
-        for idx, panel in enumerate(self._panels):
-            r, c = divmod(idx, cols)
-            self._grid.addWidget(panel, r, c)
-        self._container_layout.addWidget(self._grid_widget)
-
-    def _reflow_into_splitter(self, layout_id: str) -> None:
-        rows, cols = LAYOUT_GRID.get(layout_id, (2, 2))
-        if rows == 1:
-            self._splitter = QSplitter(Qt.Horizontal)
-            for panel in self._panels[:cols]:
-                self._splitter.addWidget(panel)
-        else:
-            self._splitter = QSplitter(Qt.Vertical)
-            for r in range(rows):
-                row = QSplitter(Qt.Horizontal)
-                start = r * cols
-                for panel in self._panels[start:start + cols]:
-                    row.addWidget(panel)
-                self._splitter.addWidget(row)
-        self._container_layout.addWidget(self._splitter)
-        self._wire_splitter_signals(self._splitter)
-        self._splitter_restored = False
-        self._restore_splitter_state()
-
-    def _wire_splitter_signals(self, splitter: QSplitter) -> None:
-        splitter.splitterMoved.connect(
-            lambda _pos, _idx: self._capture_splitter_state())
-        for i in range(splitter.count()):
-            child = splitter.widget(i)
-            if isinstance(child, QSplitter):
-                self._wire_splitter_signals(child)
-
-    def _capture_splitter_state(self) -> None:
-        if self._splitter is None:
-            return
-        parts = [",".join(str(s) for s in self._splitter.sizes())]
-        if self._splitter.orientation() == Qt.Vertical:
-            for i in range(self._splitter.count()):
-                child = self._splitter.widget(i)
-                if isinstance(child, QSplitter):
-                    parts.append(",".join(str(s) for s in child.sizes()))
-        state = ";".join(parts)
-        layout = self._store.get(PAGE_KEY).image
-        new_layout = ImageLayoutSettings(
-            layout=layout.layout,
-            panels=list(layout.panels),
-            splitter_state=state,
-        )
-        self._store.update(PAGE_KEY, "image", new_layout)
-        # Mark as restored so showEvent hide/show cycle won't overwrite user drags.
-        self._splitter_restored = True
-
-    def _apply_row_sizes(self, splitter: "QSplitter", raw: str) -> bool:
-        """Apply csv-encoded sizes to a single row splitter. Returns True if applied."""
-        if not isinstance(splitter, QSplitter):
-            return False
-        sizes = self._parse_sizes(raw)
-        if not sizes or len(sizes) != splitter.count():
-            return False
-        splitter.setSizes(sizes)
-        return True
-
-    def _restore_splitter_state(self) -> None:
-        if self._splitter is None:
-            return
-        state_str = self._store.get(PAGE_KEY).image.splitter_state
-        if not state_str:
-            return
-        groups = state_str.split(";")
-        applied = False
-        outer_sizes = self._parse_sizes(groups[0])
-        if outer_sizes and len(outer_sizes) == self._splitter.count():
-            self._splitter.setSizes(outer_sizes)
-            applied = True
-        if self._splitter.orientation() == Qt.Vertical and len(groups) > 1:
-            for i, raw in enumerate(groups[1:]):
-                if i >= self._splitter.count():
-                    break
-                if self._apply_row_sizes(self._splitter.widget(i), raw):
-                    applied = True
-        if applied:
-            self._splitter_restored = True
-
-    @staticmethod
-    def _parse_sizes(raw: str) -> list[int]:
-        try:
-            return [int(s) for s in raw.split(",") if s.strip()]
-        except ValueError:
-            return []
-
-    def _persist(self) -> None:
-        panels = []
-        for panel in self._panels:
-            tid = self._panel_topic_ids.get(panel)
-            topic_name = ""
-            msg_type = "Image"
-            if tid is not None:
-                topic_name = self._ros_client._tid_to_topic.get(tid, "")
-                type_str = getattr(self, "_known_topic_types", {}).get(topic_name, "")
-                msg_type = "CompressedImage" if "CompressedImage" in type_str else "Image"
-            panels.append(ImagePanelSettings(
-                topic_name=topic_name, msg_type=msg_type))
-        new_layout_id = self._toolbar._layout_combo.currentText()
-        old = self._store.get(PAGE_KEY).image
-        # Layout id changed -> drop incompatible splitter state.
-        keep_state = old.splitter_state if new_layout_id == old.layout else ""
-        self._store.update(
-            PAGE_KEY, "image",
-            ImageLayoutSettings(
-                layout=new_layout_id,
-                panels=panels,
-                splitter_state=keep_state,
-            ))

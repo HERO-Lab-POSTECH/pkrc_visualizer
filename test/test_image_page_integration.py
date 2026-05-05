@@ -1,5 +1,6 @@
 """End-to-end: topics_changed -> panel candidate refresh + add panel -> store persist."""
 from PyQt5.QtCore import pyqtSignal, QObject
+from PyQt5.QtWidgets import QDockWidget
 
 from pkrc_visualizer.display_settings import DisplaySettingsStore
 from pkrc_visualizer.pages.image_page import ImagePage
@@ -36,12 +37,16 @@ def test_topics_changed_propagates_to_panels(qtbot, tmp_path):
     store = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=50)
     page = ImagePage(ros, store)
     qtbot.addWidget(page)
+    page.show()
+    qtbot.waitExposed(page)
 
-    # Add one panel.
-    page._add_panel()
+    # Add one panel via toolbar button.
+    page._toolbar._add_btn.click()
     qtbot.wait(20)
-    assert len(page._panels) == 1
-    assert page._panels[0]._combo.count() == 0  # Pool is empty.
+    docks = page._inner_mw.findChildren(QDockWidget)
+    assert len(docks) == 1
+    panel = docks[0].widget()
+    assert panel._combo.count() == 0  # Pool is empty.
 
     # Simulate topic discovery.
     ros.topics_changed.emit({
@@ -49,8 +54,7 @@ def test_topics_changed_propagates_to_panels(qtbot, tmp_path):
         "/cam/jpg": "sensor_msgs/msg/CompressedImage",
     })
     qtbot.wait(20)
-    items = [page._panels[0]._combo.itemText(i)
-             for i in range(page._panels[0]._combo.count())]
+    items = [panel._combo.itemText(i) for i in range(panel._combo.count())]
     assert sorted(items) == ["/cam/jpg", "/cam/raw"]
 
 
@@ -59,7 +63,9 @@ def test_add_panel_persists_to_store(qtbot, tmp_path):
     store = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=50)
     page = ImagePage(ros, store)
     qtbot.addWidget(page)
-    page._add_panel()
+    page.show()
+    qtbot.waitExposed(page)
+    page._toolbar._add_btn.click()
     qtbot.wait(120)   # store debounce flush
     assert (tmp_path / "s.yaml").exists()
     snap = store.get("image")
