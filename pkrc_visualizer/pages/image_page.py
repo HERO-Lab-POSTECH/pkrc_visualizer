@@ -128,11 +128,20 @@ class ImagePage(BasePage):
         dock.setObjectName(ps.object_name or _new_object_name())
         dock.setFeatures(DOCK_FEATURES)
         dock.setWidget(panel)
+        # Both close paths (titlebar ✕ and programmatic dock.close()) are
+        # unified through QEvent.Close + _DockCloseFilter. The titlebar
+        # button just calls dock.close() and the filter routes it to
+        # _remove_dock — this avoids a second lambda whose lifetime
+        # depended on the QPushButton.clicked connection alone.
+        dock.setTitleBarWidget(panel.make_titlebar(close_cb=dock.close))
         close_cb = lambda d=dock, p=panel: self._remove_dock(d, p)
-        dock.setTitleBarWidget(panel.make_titlebar(close_cb=close_cb))
-        # Install event filter to catch dock.close() in addition to titlebar ✕.
         _filter = _DockCloseFilter(close_cb, parent=dock)
         dock.installEventFilter(_filter)
+        # Keep the lambda alive for the dock's lifetime (PyQt5 connect
+        # uses weak references for some bound forms; pinning to the dock
+        # guarantees the close path stays wired even after the spawn
+        # function returns).
+        dock._close_handler = close_cb  # type: ignore[attr-defined]
         dock.dockLocationChanged.connect(self._persist)
 
         if self._panels:

@@ -67,6 +67,22 @@ def test_close_dock_removes_panel(qtbot, tmp_path):
     assert len(store.get("image").image.panels) == 1
 
 
+def test_titlebar_close_button_removes_dock(qtbot, tmp_path):
+    """The user-visible path: clicking the titlebar ✕ removes the dock."""
+    from PyQt5.QtWidgets import QPushButton
+    page, _ = _build_page(qtbot, tmp_path)
+    page._toolbar._add_btn.click()
+    docks = page._inner_mw.findChildren(QDockWidget)
+    assert len(docks) == 1
+    titlebar = docks[0].titleBarWidget()
+    close_btns = [b for b in titlebar.findChildren(QPushButton)
+                  if b.text() == "✕"]
+    assert len(close_btns) == 1, "titlebar must expose exactly one ✕ button"
+    close_btns[0].click()
+    qtbot.wait(50)
+    assert page._panels == []
+
+
 def test_dock_state_roundtrip(qtbot, tmp_path):
     # Build, add 3 docks, capture state, recreate from same yaml.
     page1, store = _build_page(qtbot, tmp_path)

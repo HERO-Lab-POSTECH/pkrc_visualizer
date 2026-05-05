@@ -45,6 +45,12 @@
   `add_viewer_clicked` signal.
 
 ### Fixed
+- ImagePage panel ✕ button now actually removes the panel. The
+  titlebar close button is wired to `dock.close()` so both the
+  user-clicked path and the programmatic `dock.close()` path go
+  through the same `QEvent.Close` filter, and the close-handler
+  lambda is pinned to the dock so its lifetime survives PyQt5's
+  weak-ref edge cases on `QPushButton.clicked.connect`.
 - `cloud.size_unit` toggle no longer freezes the GPU. The clamp lives
   in two layers: `SettingsPanel` snaps the size slider visually when
   the user toggles the unit combobox, and `DisplaySettingsStore.update`
@@ -63,7 +69,7 @@
   so the visible splat radius equals `cloud.size` literally.
 
 ### Verification
-- `python3 -m pytest test/ -q` PASS (95 tests, +11 from v0.4.0).
+- `python3 -m pytest test/ -q` PASS (96 tests, +12 from v0.4.0).
 - `colcon build --symlink-install --packages-select pkrc_visualizer`
   PASS.
 - Manual smoke on `7_ucrc_watertank/m3000d-range10-tilt90` bag pending
