@@ -9,7 +9,7 @@ import base64
 import uuid
 from typing import Optional
 
-from PyQt5.QtCore import QByteArray, QEvent, QObject, Qt, QTimer
+from PyQt5.QtCore import QByteArray, QEvent, QObject, Qt
 from PyQt5.QtWidgets import QDockWidget, QMainWindow, QVBoxLayout, QWidget
 from sensor_msgs.msg import CompressedImage, Image
 
@@ -148,7 +148,7 @@ class ImagePage(BasePage):
 
     # ---- close ------------------------------------------------------------
     def _remove_dock(self, dock: QDockWidget, panel: ImagePanel) -> None:
-        """Called by titlebar ✕ button. Removes the dock unconditionally."""
+        """Called by titlebar ✕ button or QEvent.Close. Idempotent."""
         if dock not in [d for d, _ in self._panels]:
             return
         sub_id = self._panel_topic_ids.pop(panel, None)
@@ -159,19 +159,6 @@ class ImagePage(BasePage):
         dock.setParent(None)
         dock.deleteLater()
         self._persist()
-
-    def _schedule_close_check(self, dock: QDockWidget, panel: ImagePanel,
-                              visible: bool) -> None:
-        """Handle visibilityChanged for floating-dock close fallback."""
-        if visible:
-            return
-        QTimer.singleShot(0, lambda: self._on_dock_visibility(dock, panel))
-
-    def _on_dock_visibility(self, dock: QDockWidget, panel: ImagePanel) -> None:
-        """Fallback close handler for when the dock window (floating) is dismissed."""
-        if dock.isVisible() or not dock.isFloating():
-            return
-        self._remove_dock(dock, panel)
 
     # ---- topic pool / subscription ----------------------------------------
     def _on_topics_changed(self, names) -> None:
