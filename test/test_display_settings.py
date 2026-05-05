@@ -232,6 +232,39 @@ def test_image_dock_state_yaml_roundtrip(tmp_path: Path):
     assert loaded["image"].image.panels[0].topic_name == "/foo"
 
 
+def test_store_clamps_size_on_unit_toggle_pixels_to_meters(tmp_path, qtbot):
+    """A 10 px size must become a sane 0.05 m the moment unit flips.
+
+    The previous panel-side guard depended on two debounced widget
+    signals delivered in the right order. This test pins the contract
+    at the store layer: the moment size_unit changes to meters, the
+    stored size must be unit-safe — atomically, before changed emits.
+    """
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=10)
+    store.update("slam", "cloud.size", 10.0)
+    store.update("slam", "cloud.size_unit", "meters")
+    cloud = store.get("slam").cloud
+    assert cloud.size_unit == "meters"
+    assert cloud.size == 0.05
+
+
+def test_store_clamps_size_on_unit_toggle_meters_to_pixels(tmp_path, qtbot):
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=10)
+    store.update("slam", "cloud.size", 0.05)
+    store.update("slam", "cloud.size_unit", "pixels")
+    cloud = store.get("slam").cloud
+    assert cloud.size_unit == "pixels"
+    assert cloud.size == 2.0
+
+
+def test_store_keeps_safe_size_on_unit_toggle(tmp_path, qtbot):
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=10)
+    store.update("slam", "cloud.size", 0.5)
+    store.update("slam", "cloud.size_unit", "meters")
+    cloud = store.get("slam").cloud
+    assert cloud.size == 0.5         # already <= threshold
+
+
 def test_image_legacy_keys_drop_silently(tmp_path: Path):
     # v0.4.0 yaml had layout + splitter_state. v0.5.0 must not crash.
     path = tmp_path / "settings.yaml"
