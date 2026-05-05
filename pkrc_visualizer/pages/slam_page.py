@@ -1,4 +1,4 @@
-"""SLAM page — accumulate /fast_lio/debug/cloud_registered (world frame) +
+"""SLAM page — accumulate /fast_lio/debug/points_world (world frame) +
 overlay map-origin and robot-frame axes from odometry."""
 import numpy as np
 from PyQt5.QtWidgets import QVBoxLayout

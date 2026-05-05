@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased] — Phase P4d: Topic rename (refactor)
+
+### Changed
+- `topic_config.py` — 8 TopicSpec subscriber topic_name 갱신 (spec §2.3):
+  - `slam_cloud`: `/fast_lio/debug/cloud_registered` → `/fast_lio/debug/points_world`
+  - `slam_path`: `/fast_lio/path` → `/fast_lio/debug/path`
+  - `pose_odom`: `/fast_lio/odometry` → `/localization/fast_lio/odometry`
+  - `pose_loc_odom`: `/fast_lio/localization/odometry` → `/localization/fast_lio_loc/odometry`
+  - `pose_confidence`: `/fast_lio/localization/confidence` → `/localization/fast_lio_loc/confidence`
+  - `pose_path`: `/fast_lio/path` → `/fast_lio/debug/path`
+  - `map_cloud`: `/sonar_3d_mapper/point_cloud` → `/perception/sonar_3d/points`
+  - `map_markers`: `/sonar_3d_mapper/marker_array` → `/perception/sonar_3d_visualizer/markers`
+- `pages/slam_page.py` — docstring 토픽명 갱신 (`cloud_registered` → `points_world`).
+- `pages/mapping_page.py` — docstring 토픽명 갱신 (`sonar_3d_mapper/...` → `perception/sonar_3d/...`).
+- `README.md` — Pages 테이블 토픽명 갱신.
+
+### Verification
+- `colcon build --symlink-install --packages-select pkrc_visualizer` PASS (0.45s).
+- static grep: legacy topic refs 0건 (`/fast_lio/odometry`, `/sonar_3d_mapper/*` 등).
+
+### Notes
+- Cross-repo dependency: lidar_slam P4b (PR #15) + sonar_3d_reconstruction P4c (PR #11) 이미 머지.
+- P5 (Launch arg + ROS Time) 준비 완료.
+
 ## [0.5.0] — 2026-05-05 — rqt-style Image Page
 
 ### Removed

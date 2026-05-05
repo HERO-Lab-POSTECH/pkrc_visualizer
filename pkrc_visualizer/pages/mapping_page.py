@@ -1,4 +1,4 @@
-"""Sonar Mapping page: combined view of /sonar_3d_mapper/point_cloud + marker_array."""
+"""Sonar Mapping page: combined view of /perception/sonar_3d/points + /perception/sonar_3d_visualizer/markers."""
 import numpy as np
 from PyQt5.QtWidgets import QVBoxLayout
 from sensor_msgs_py import point_cloud2

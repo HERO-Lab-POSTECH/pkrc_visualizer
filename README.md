@@ -26,9 +26,9 @@ ros2 run pkrc_visualizer pkrc_viz
 
 | 메뉴 | 토픽 |
 |---|---|
-| SLAM | `/fast_lio/cloud_registered_body`, `/fast_lio/path` |
-| 위치/경로 | `/fast_lio/odometry`, `/fast_lio/localization/{odometry, confidence}`, `/fast_lio/path` |
-| Sonar Mapping | `/sonar_3d_mapper/point_cloud`, `/sonar_3d_mapper/marker_array` |
+| SLAM | `/fast_lio/debug/points_world`, `/fast_lio/debug/path` |
+| 위치/경로 | `/localization/fast_lio/odometry`, `/localization/fast_lio_loc/{odometry, confidence}`, `/fast_lio/debug/path` |
+| Sonar Mapping | `/perception/sonar_3d/points`, `/perception/sonar_3d_visualizer/markers` |
 | Sonar Image | 사용자 입력 (런타임) — `+ Add Viewer` 후 ROS 활성 토픽 중 `sensor_msgs/Image` 또는 `CompressedImage` 선택 |
 
 토픽 매핑은 `pkrc_visualizer/topic_config.py`에서 변경.
