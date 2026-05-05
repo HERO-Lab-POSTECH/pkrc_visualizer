@@ -31,6 +31,15 @@ def test_cloud_schema_without_decay():
     assert "cloud.size_unit" in paths
 
 
+def test_cloud_size_allows_sub_meter_resolution():
+    # meters mode (vtkPointGaussianMapper.SetScaleFactor in world units)
+    # needs sub-1.0 splat sizes; pixels mode can stay at integer steps.
+    spec = next(f for f in cloud_schema(include_decay=True)
+                if f.path == "cloud.size")
+    assert spec.options["min"] <= 0.01
+    assert spec.options["step"] <= 0.1
+
+
 def test_background_schema():
     fields = background_schema()
     assert len(fields) == 1

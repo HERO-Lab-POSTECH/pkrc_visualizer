@@ -6,6 +6,12 @@
 - `CloudSettings.size_unit: "pixels" | "meters"` — meters mode swaps the
   cloud actor mapper to `vtkPointGaussianMapper(SetScaleFactor=size,
   EmissiveOff)` so splats render in world units and zoom with the camera.
+- **Default `size_unit` is now `meters`** (was `pixels`) so first-run users
+  immediately get zoom-aware splats. Existing YAML files keep their saved
+  value via `_filter_known`.
+- `cloud.size` slider widened to `min=0.01, max=20.0, step=0.1` (was
+  `min=1.0, max=20.0, step=1.0`) so meters mode can express sub-meter
+  splat radii (e.g. 0.05 m) without breaking pixel-mode usability.
 - `ImageLayoutSettings.splitter_state: str` — serialized splitter sizes
   (`"outer_csv; row0_csv; row1_csv"`).
 - `ImagePage` now builds `1x1` and `free` via `QGridLayout` and `2x1`,

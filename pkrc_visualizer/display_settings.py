@@ -30,7 +30,7 @@ class FramesSettings:
 class CloudSettings:
     style: str = "points"            # points | square | spheres
     size: float = 2.0
-    size_unit: str = "pixels"        # pixels | meters
+    size_unit: str = "meters"        # pixels | meters
     alpha: float = 1.0
     decay_seconds: float = 30.0      # 0.0 disables decay (accumulate forever, capped by HARD_MAX)
     color_transformer: str = "flat"  # flat | z | intensity

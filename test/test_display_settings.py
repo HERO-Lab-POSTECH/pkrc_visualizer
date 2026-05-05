@@ -17,7 +17,7 @@ def test_dataclass_defaults():
     assert s.frames.map_axes_length_m == 1.0
     assert s.cloud.color_transformer == "flat"
     assert s.cloud.decay_seconds == 30.0
-    assert s.cloud.size_unit == "pixels"
+    assert s.cloud.size_unit == "meters"
 
 
 def test_yaml_roundtrip(tmp_path: Path):
@@ -209,7 +209,7 @@ def test_cloud_decay_max_points_legacy_key_silently_dropped(tmp_path: Path):
 
 def test_cloud_size_unit_default():
     s = CloudSettings()
-    assert s.size_unit == "pixels"
+    assert s.size_unit == "meters"
 
 
 def test_cloud_size_unit_yaml_roundtrip(tmp_path: Path):
