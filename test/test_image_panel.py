@@ -1,5 +1,4 @@
 """ImagePanel: combo + view + close + Hz."""
-import pytest
 from PyQt5.QtWidgets import QLabel, QPushButton, QWidget
 from sensor_msgs.msg import Image
 

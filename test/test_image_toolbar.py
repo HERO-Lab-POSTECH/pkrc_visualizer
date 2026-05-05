@@ -1,27 +1,26 @@
-"""ImageToolbar: + Add Viewer + Layout combo."""
-from pkrc_visualizer.widgets.image_toolbar import ImageToolbar, LAYOUT_OPTIONS
+"""ImageToolbar (v0.5.0) exposes only the Add Viewer button."""
+from pkrc_visualizer.widgets.image_toolbar import ImageToolbar
 
 
-def test_toolbar_layout_options(qtbot):
+def test_toolbar_has_add_button(qtbot):
     bar = ImageToolbar()
     qtbot.addWidget(bar)
-    items = [bar._layout_combo.itemText(i) for i in range(bar._layout_combo.count())]
-    assert items == LAYOUT_OPTIONS
+    assert bar._add_btn.text().endswith("Add Viewer")
 
 
-def test_add_viewer_signal(qtbot):
+def test_toolbar_emits_add_viewer_clicked(qtbot):
     bar = ImageToolbar()
     qtbot.addWidget(bar)
-    spy = []
-    bar.add_viewer_clicked.connect(lambda: spy.append(1))
+    received = []
+    bar.add_viewer_clicked.connect(lambda: received.append(True))
     bar._add_btn.click()
-    assert spy == [1]
+    assert received == [True]
 
 
-def test_layout_changed_signal(qtbot):
+def test_toolbar_no_layout_combobox(qtbot):
+    # v0.5.0 removed the layout selector; ensure it's gone.
     bar = ImageToolbar()
     qtbot.addWidget(bar)
-    spy = []
-    bar.layout_changed.connect(lambda v: spy.append(v))
-    bar._layout_combo.setCurrentText("3x2")
-    assert spy[-1] == "3x2"
+    assert not hasattr(bar, "_layout_combo")
+    assert not hasattr(bar, "layout_changed")
+    assert not hasattr(bar, "set_layout_value")
