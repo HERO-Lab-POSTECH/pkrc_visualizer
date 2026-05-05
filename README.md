@@ -47,25 +47,30 @@ SLAM 및 Sonar Mapping 페이지의 3D 뷰포트 좌측 하단에 ⚙ 버튼이 
 설정은 변경 시 `~/.config/pkrc_visualizer/display_settings.yaml`에 자동 저장되고
 재시작 시 복원됩니다. "Reset this tab to defaults" 버튼은 현재 탭만 초기화.
 
-## Image Page Workflow (v0.3.0)
+## Image Page Workflow (v0.5.0 — rqt-style)
 
-`Sonar Image` 페이지는 더 이상 고정 탭을 사용하지 않습니다. 사용자가
-런타임에 직접 토픽을 추가:
+`Sonar Image` 페이지는 자유 배치 dock 영역입니다. 고정 layout 모드
+(1×1 / 2×1 / 2×2 / 3×2 / free)는 더 이상 존재하지 않습니다.
 
-1. 상단 `+ Add Viewer` 클릭 → 빈 패널 추가.
-2. 패널의 콤보에 토픽 이름 일부 입력 → ROS에 활성 중인
+1. 상단 `+ Add Viewer` 클릭 → 빈 dock 패널 추가.
+2. 패널 헤더의 콤보에 토픽 이름 일부 입력 → ROS에 활성 중인
    `sensor_msgs/Image` / `CompressedImage` 토픽 자동완성.
-3. 선택 시 즉시 영상 표시. 패널 우상단 `✕`로 제거.
+3. 패널 헤더(combobox + Hz + ✕)를 **드래그**하여 자유 배치:
+   - 다른 패널의 가장자리에 떨어뜨리면 좌/우/위/아래 split.
+   - 다른 패널의 헤더에 떨어뜨리면 tab으로 묶임 (tabify).
+   - 도크 영역 밖으로 끌어내면 floating window로 분리.
+4. 헤더 우측 ✕ 버튼으로 제거.
 
-Layout 콤보로 그리드 모드 변경 (1×1 / 2×1 / 2×2 / 3×2 / free).
-모든 패널 + layout 선택은 `~/.config/pkrc_visualizer/display_settings.yaml`에
-자동 저장되어 재실행 시 복원.
+도크 위치/크기/탭/플로팅 상태는 모두
+`~/.config/pkrc_visualizer/display_settings.yaml`의 `dock_state` 필드
+(base64 `QMainWindow.saveState`)에 자동 저장되어 재실행 시 복원됩니다.
+v0.4.0 이전 yaml은 `panels` 리스트만 살리고 layout 정보는 자연 무시 →
+첫 v0.5.0 실행 시 가로 1열로 재배치됩니다.
 
-## Cloud Rendering & Layout (v0.4.0)
+## Cloud Rendering (v0.4.0)
 
-- **v0.4.0** — Time-based cloud decay (RViz convention), zoom-aware
-  point size (world units via `vtkPointGaussianMapper`), and
-  resizable image panels (single or nested `QSplitter`).
+- Time-based cloud decay (RViz convention), zoom-aware point size
+  (world units via `vtkPointGaussianMapper`).
 
 ## Architecture
 

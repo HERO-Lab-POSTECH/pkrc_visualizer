@@ -1,15 +1,68 @@
 # Changelog
 
-## [Unreleased] — v0.5.0 — rqt-style Image Page (in progress)
+## [0.5.0] — 2026-05-05 — rqt-style Image Page
 
 ### Removed
-- _filled in by Task 10_
+- `ImageLayoutSettings.layout` and `ImageLayoutSettings.splitter_state`
+  fields. v0.4.0 yaml files keep their `panels` list; the two removed
+  keys are silently dropped via `_filter_known`.
+- `ImageToolbar` layout combobox + `layout_changed` signal +
+  `set_layout_value`. Layout presets (`1x1` / `2x1` / `2x2` / `3x2` /
+  `free`) no longer exist as a UI choice.
+- `test/test_image_page_splitter.py` (replaced by
+  `test/test_image_page_dock.py`).
 
 ### Added
-- _filled in by Task 10_
+- `ImageLayoutSettings.dock_state: str` — base64-encoded
+  `QMainWindow.saveState()` capturing the full dock geometry (positions,
+  splits, tabs, floating windows).
+- `ImagePanelSettings.object_name: str` — stable `panel_<uuid>` id so
+  `restoreState` re-attaches the same dock between sessions (otherwise
+  every spawn would generate a fresh uuid and tabify/floating state
+  would be lost on reload).
+- `ImagePage` now hosts an inner `QMainWindow`. Each panel is a
+  `QDockWidget(panel_<uuid4>)` with `Movable | Floatable | Closable`
+  features. Users drag dock headers to relocate, tabify, or float —
+  rqt parity.
+- `ImagePanel.make_titlebar(close_cb)` factory returns a single-line
+  `QWidget` (combobox + Hz label + ✕) that the dock installs as
+  `setTitleBarWidget`. The panel body is purely the `ImageView`.
+- `_DockCloseFilter(QObject)` event filter intercepts `QEvent.Close` so
+  both the titlebar ✕ and programmatic `dock.close()` route through the
+  same panel-removal path.
+- `test/test_image_page_dock.py` — 7 tests covering default empty,
+  add viewer, horizontal split, close → remove, dock_state roundtrip,
+  tabify/float persistence, legacy yaml drop.
+- `test/test_migration_v04_to_v05.py` — explicit v0.4.0 → v0.5.0 yaml
+  migration coverage (legacy keys dropped on load + on subsequent save).
+
+### Changed
+- First-run UX: ImagePage is empty (no auto-spawned panels). Users
+  click "+ Add Viewer" in the toolbar to create the first dock.
+- `ImagePanel` no longer carries an inline header. Combobox / Hz /
+  close live exclusively inside the dock title bar.
+- `ImageToolbar` reduced to a single Add Viewer button +
+  `add_viewer_clicked` signal.
+
+### Verification
+- `python3 -m pytest test/ -q` PASS (88 tests, +4 from v0.4.0).
+- `colcon build --symlink-install --packages-select pkrc_visualizer`
+  PASS.
+- Manual smoke on `7_ucrc_watertank/m3000d-range10-tilt90` bag pending
+  (PR description tracks).
 
 ### Notes
-- _filled in by Task 10_
+- **One-time layout reset for v0.4.0 users.** When v0.5.0 first opens
+  an existing `~/.config/pkrc_visualizer/display_settings.yaml`,
+  panels are recreated in a default left-to-right horizontal row (the
+  saved `splitter_state` is dropped). User drags to taste, then the
+  new `dock_state` persists.
+- `PyVistaView.__init__` (94 LOC) remains over the 50-LOC limit. This
+  was flagged as a v0.4.0 cleanup follow-up and is unchanged by v0.5.0
+  scope (ImagePage redesign). Defer to a dedicated PyVistaView
+  refactor.
+- Perspective save/load (multiple named layouts), cross-page docking,
+  and "undo close" are deferred — see spec Out of Scope.
 
 ## [0.4.0] — 2026-05-04 — Cloud rendering & layout polish
 
