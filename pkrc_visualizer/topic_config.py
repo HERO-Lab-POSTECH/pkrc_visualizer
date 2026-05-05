@@ -19,18 +19,18 @@ class TopicSpec:
 # Page key → list of topics
 TOPICS = {
     "slam": [
-        TopicSpec("slam_cloud", "/fast_lio/debug/cloud_registered", PointCloud2, qos_best_effort=True),
-        TopicSpec("slam_path", "/fast_lio/path", Path),
+        TopicSpec("slam_cloud", "/fast_lio/debug/points_world", PointCloud2, qos_best_effort=True),
+        TopicSpec("slam_path", "/fast_lio/debug/path", Path),
     ],
     "pose": [
-        TopicSpec("pose_odom", "/fast_lio/odometry", Odometry),
-        TopicSpec("pose_loc_odom", "/fast_lio/localization/odometry", Odometry),
-        TopicSpec("pose_confidence", "/fast_lio/localization/confidence", Float32),
-        TopicSpec("pose_path", "/fast_lio/path", Path),
+        TopicSpec("pose_odom", "/localization/fast_lio/odometry", Odometry),
+        TopicSpec("pose_loc_odom", "/localization/fast_lio_loc/odometry", Odometry),
+        TopicSpec("pose_confidence", "/localization/fast_lio_loc/confidence", Float32),
+        TopicSpec("pose_path", "/fast_lio/debug/path", Path),
     ],
     "mapping": [
-        TopicSpec("map_cloud", "/sonar_3d_mapper/point_cloud", PointCloud2, qos_best_effort=True),
-        TopicSpec("map_markers", "/sonar_3d_mapper/marker_array", MarkerArray),
+        TopicSpec("map_cloud", "/perception/sonar_3d/points", PointCloud2, qos_best_effort=True),
+        TopicSpec("map_markers", "/perception/sonar_3d_visualizer/markers", MarkerArray),
     ],
 }
 
