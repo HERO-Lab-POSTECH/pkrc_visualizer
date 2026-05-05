@@ -45,12 +45,15 @@
   `add_viewer_clicked` signal.
 
 ### Fixed
-- `cloud.size_unit` toggle no longer freezes the GPU. `SettingsPanel`
-  watches the unit combobox and re-clamps `cloud.size` to a unit-safe
-  default (2.0 px / 0.05 m) when the current value falls on the wrong
-  side of a 1.0 threshold. A pixel-mode size of 10 carrying over as a
-  10 m splat radius would previously paint quads covering most of the
-  viewport via `vtkPointGaussianMapper`.
+- `cloud.size_unit` toggle no longer freezes the GPU. The clamp lives
+  in two layers: `SettingsPanel` snaps the size slider visually when
+  the user toggles the unit combobox, and `DisplaySettingsStore.update`
+  re-applies the clamp atomically inside the same transaction so the
+  view never receives a stale (size_unit, size) pair while the panel's
+  two debounce timers are still settling. Prior to the store-layer
+  guard, the size_unit signal usually beat the size signal to the view
+  and `vtkPointGaussianMapper` briefly painted a 10 m splat that froze
+  the GPU.
 - `cloud.style` (`points` / `square` / `spheres`) now affects
   meters-mode splats. `vtkPointGaussianMapper` receives an explicit
   `SetSplatShaderCode` per style with a `discard` outside the unit
@@ -60,7 +63,7 @@
   so the visible splat radius equals `cloud.size` literally.
 
 ### Verification
-- `python3 -m pytest test/ -q` PASS (92 tests, +8 from v0.4.0).
+- `python3 -m pytest test/ -q` PASS (95 tests, +11 from v0.4.0).
 - `colcon build --symlink-install --packages-select pkrc_visualizer`
   PASS.
 - Manual smoke on `7_ucrc_watertank/m3000d-range10-tilt90` bag pending
