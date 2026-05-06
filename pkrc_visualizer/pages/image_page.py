@@ -69,6 +69,7 @@ class ImagePage(BasePage):
         self._panels: list[tuple[QDockWidget, ImagePanel]] = []
         self._panel_topic_ids: dict[ImagePanel, Optional[str]] = {}
         self._topic_pool: list[str] = []
+        self._topic_types: dict[str, str] = {}  # topic_name -> type_str
         self._restored: bool = False
         self._restoring: bool = False
 
@@ -175,8 +176,10 @@ class ImagePage(BasePage):
     def _on_topics_changed(self, names) -> None:
         if isinstance(names, dict):
             self._topic_pool = sorted(names.keys())
+            self._topic_types = dict(names)
         else:
             self._topic_pool = list(names)
+            self._topic_types = {}
         for _, p in self._panels:
             p.set_topic_candidates(self._topic_pool)
 
@@ -184,8 +187,9 @@ class ImagePage(BasePage):
         sub_id = self._panel_topic_ids.get(panel)
         if sub_id:
             self._ros_client.unsubscribe(sub_id)
-        new_id = self._ros_client.subscribe_dynamic(
-            topic, MSG_TYPE_MAP.get("Image", Image))
+        type_str = self._topic_types.get(topic, "")
+        msg_type = MSG_TYPE_MAP.get(type_str.split("/")[-1], Image)
+        new_id = self._ros_client.subscribe_dynamic(topic, msg_type)
         self._panel_topic_ids[panel] = new_id
         self._persist()
 
@@ -197,7 +201,7 @@ class ImagePage(BasePage):
             panels=[
                 ImagePanelSettings(
                     topic_name=p.current_topic(),
-                    msg_type="Image",
+                    msg_type=self._resolve_type_name(p.current_topic()),
                     object_name=d.objectName(),
                 )
                 for d, p in self._panels
@@ -205,6 +209,12 @@ class ImagePage(BasePage):
             dock_state=_encode_state(self._inner_mw.saveState()),
         )
         self._store.update(PAGE_KEY, "image", snapshot)
+
+    def _resolve_type_name(self, topic: str) -> str:
+        """Return the short type name (e.g. 'CompressedImage') for the given topic."""
+        type_str = self._topic_types.get(topic, "")
+        short = type_str.split("/")[-1]
+        return short if short in MSG_TYPE_MAP else "Image"
 
     # ---- message handling -------------------------------------------------
     def _is_my_topic(self, topic_id: str) -> bool:
