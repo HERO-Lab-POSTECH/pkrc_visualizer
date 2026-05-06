@@ -30,7 +30,7 @@ TOPICS = {
     ],
     "mapping": [
         TopicSpec("map_cloud", "/perception/sonar_3d/points", PointCloud2, qos_best_effort=True),
-        TopicSpec("map_markers", "/perception/sonar_3d_visualizer/markers", MarkerArray),
+        TopicSpec("map_markers", "/perception/sonar_3d_visualizer/markers", MarkerArray, qos_best_effort=True),
     ],
 }
 
