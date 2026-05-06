@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] — Post-Audit Fix B-5 (fix)
+
+### Fixed
+- B-5: `slam_path` and `pose_path` subscribers (`/fast_lio/debug/path`) now declare `qos_best_effort=True`. Publisher uses `pkrc_qos::sensor_qos()` (BEST_EFFORT, depth=5); RELIABLE subscribers were silently failing to match (same pattern as C-1c).
+
+### Verification
+- colcon build PASS
+- All `/fast_lio/debug/...` subscribers in topic_config.py now correctly flag BEST_EFFORT.
+
+---
+
 ## [Unreleased] — C-1c: map_markers QoS mismatch fix
 
 ### Fixed
