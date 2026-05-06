@@ -20,7 +20,8 @@ def test_transient_local_subscription_uses_transient_local_durability():
     client = RosClient([spec], node_name="qos_test_node")
     client.start()
     try:
-        node = client._node  # type: ignore
+        node = client._node
+        assert node is not None
         endpoints = node.get_subscriptions_info_by_topic("/test/occupancy_grid")
         assert endpoints, "subscription not registered"
         from rclpy.qos import DurabilityPolicy
