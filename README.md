@@ -26,7 +26,7 @@ ros2 run pkrc_visualizer pkrc_viz
 
 | 메뉴 | 토픽 |
 |---|---|
-| SLAM | `/fast_lio/debug/points_world`, `/fast_lio/debug/path` |
+| SLAM | `/fast_lio/debug/points_world`, `/fast_lio/debug/path`, `/localization/fast_lio_loc/occupancy_grid` (transient_local, 선택) |
 | 위치/경로 | `/localization/fast_lio/odometry`, `/localization/fast_lio_loc/{odometry, confidence}`, `/fast_lio/debug/path` |
 | Sonar Mapping | `/perception/sonar_3d/points`, `/perception/sonar_3d_visualizer/markers` |
 | Sonar Image | 사용자 입력 (런타임) — `+ Add Viewer` 후 ROS 활성 토픽 중 `sensor_msgs/Image` 또는 `CompressedImage` 선택 |
@@ -46,6 +46,26 @@ SLAM 및 Sonar Mapping 페이지의 3D 뷰포트 좌측 하단에 ⚙ 버튼이 
 
 설정은 변경 시 `~/.config/pkrc_visualizer/display_settings.yaml`에 자동 저장되고
 재시작 시 복원됩니다. "Reset this tab to defaults" 버튼은 현재 탭만 초기화.
+
+## SLAM Prior Map + Pose Estimate (v0.6.0)
+
+`fast-lio` localization 모드에서 SLAM 페이지가 prior PCD를 z 슬라이스로 변환한
+2D OccupancyGrid (`/localization/fast_lio_loc/occupancy_grid`)를 자동 구독하여
+`map` frame의 z=0 평면에 텍스처로 렌더링한다. 누적 LiDAR 스캔이 그 평면 위에
+겹쳐 보인다.
+
+설정 패널 SLAM 탭의 **Prior Map** 그룹에서 표시 on/off와 alpha를 조절할 수 있다.
+
+페이지 좌상단의 **Pose Estimate** 토글을 누르면 RViz의 "2D Pose Estimate"와 동등한
+입력 모드가 활성화된다:
+
+1. 카메라가 자동으로 top-down으로 전환 (이전 시점 저장).
+2. 평면 위에서 좌클릭 + 드래그하면 임시 화살표가 그려지고, release 시
+   (시작점 = position, 드래그 방향 = yaw)이 `/initialpose`로 publish된다.
+3. 토글을 다시 누르면 직전 카메라 시점으로 복귀.
+
+`fast-lio`의 `localization_node`가 이미 `/initialpose`를 구독 중이므로 RViz
+없이도 단독으로 초기 위치 입력이 가능하다.
 
 ## Image Page Workflow (v0.5.0 — rqt-style)
 
