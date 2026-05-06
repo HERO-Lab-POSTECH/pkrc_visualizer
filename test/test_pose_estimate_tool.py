@@ -59,3 +59,28 @@ def test_observer_priority_above_default_style(view):
     AbortFlagOn() actually suppress camera rotation. Regression guard."""
     from pkrc_visualizer.widgets.pose_estimate_tool import PoseEstimateTool
     assert PoseEstimateTool._OBSERVER_PRIORITY > 0.0
+
+
+def test_abort_tolerates_missing_AbortFlagOn():
+    """Some VTK 9.x interactor objects don't expose AbortFlagOn. Calling
+    `_abort` against such an object must not raise — release publish was
+    happening but every drag spammed the console with AttributeError tracebacks."""
+    from pkrc_visualizer.widgets.pose_estimate_tool import PoseEstimateTool
+
+    class _NoAbortFlagOn:
+        pass
+
+    PoseEstimateTool._abort(_NoAbortFlagOn())  # must not raise
+
+
+def test_abort_calls_AbortFlagOn_when_available():
+    from pkrc_visualizer.widgets.pose_estimate_tool import PoseEstimateTool
+
+    class _Spy:
+        called = False
+        def AbortFlagOn(self):
+            self.called = True
+
+    spy = _Spy()
+    PoseEstimateTool._abort(spy)
+    assert spy.called is True

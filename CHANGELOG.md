@@ -17,9 +17,17 @@
 - `SlamPage.refresh()`가 cloud chunk와 odom pose를 forwarding 전에 transform.
   mapping 모드(TF 없음)는 동작 변화 없음.
 
+### Fixed
+- `PoseEstimateTool`: VTK 9.x의 `vtkGenericRenderWindowInteractor`는
+  `AbortFlagOn()`을 노출하지 않아 click+drag 시 매 mouse-move/release마다
+  `AttributeError` traceback이 콘솔에 누적되던 문제. release publish 자체는
+  정상 동작했지만 콘솔 노이즈가 컸음. `_abort()` helper로 안전 호출하도록 변경.
+  attach() 시 `vtkInteractorStyleUser`로 교체하므로 카메라 회전 차단 로직은
+  이미 보장되어 있음 — `AbortFlagOn`은 belt-and-braces.
+
 ### Verification
 - colcon build PASS
-- pytest PASS (132 tests, 신규 9개 + 기존 회귀 모두 통과)
+- pytest PASS (135 tests, 신규 11개 + 기존 회귀 모두 통과)
 - 수동 (PR description 체크박스): localization bag 재생 → 2D Pose Estimate
   클릭 시 cloud/triad 점프 확인. mapping bag 재생 시 회귀 없음.
 

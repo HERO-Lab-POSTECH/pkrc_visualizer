@@ -85,13 +85,23 @@ class PoseEstimateTool:
 
     # ---- VTK observer callbacks ----------------------------------------------------
 
+    @staticmethod
+    def _abort(obj) -> None:
+        """Best-effort AbortFlagOn — VTK 9.x's vtkGenericRenderWindowInteractor
+        does not expose it, but our InteractorStyleUser swap (attach()) already
+        prevents camera rotation. Calling AbortFlagOn here is belt-and-braces
+        for any caller that wires us to a different style."""
+        fn = getattr(obj, "AbortFlagOn", None)
+        if fn is not None:
+            fn()
+
     def _on_left_press(self, obj, event) -> None:
         sx, sy = self._plotter.interactor.GetEventPosition()
         world = self._pick_z0(sx, sy)
         if world is None:
             return
         self._on_press_world(world[0], world[1])
-        obj.AbortFlagOn()  # block camera rotation start
+        self._abort(obj)
 
     def _on_mouse_move(self, obj, event) -> None:
         if self._start is None:
@@ -101,7 +111,7 @@ class PoseEstimateTool:
         if world is None:
             return
         self._on_move_world(world[0], world[1])
-        obj.AbortFlagOn()  # block camera rotation while dragging
+        self._abort(obj)
 
     def _on_left_release(self, obj, event) -> None:
         if self._start is None:
@@ -111,7 +121,7 @@ class PoseEstimateTool:
         if world is None:
             return
         self._on_release_world(world[0], world[1])
-        obj.AbortFlagOn()  # block camera rotation end
+        self._abort(obj)
 
     # ---- world-coordinate handlers (also unit-test entry points) -------------------
 
