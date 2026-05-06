@@ -43,7 +43,7 @@ class SlamPage(BasePage):
         return topic_id in {"slam_cloud", "slam_path", "pose_odom", "slam_prior_grid"}
 
     def refresh(self) -> None:
-        tf_matrix = self._ros_client.lookup_map_from_odom()  # None ⇒ identity
+        tf_matrix = self._active_tf()  # None when no TF, or TF is still identity
 
         cloud_msg = self._latest.pop("slam_cloud", None)
         if cloud_msg is not None:
@@ -106,6 +106,21 @@ class SlamPage(BasePage):
         if self._pose_estimate_action.isChecked():
             self._pose_estimate_action.setChecked(False)
         super().hideEvent(event)
+
+    def _active_tf(self):
+        """Return the live `map ← odom` transform, or None for identity fallback.
+
+        fast-lio publishes an identity TF during the global localization grid
+        search (before the user provides /initialpose). Treating that case as
+        identity-fallback keeps the cloud visible in odom frame so the user
+        has something to aim at when clicking 2D Pose Estimate.
+        """
+        m = self._ros_client.lookup_map_from_odom()
+        if m is None or getattr(m, "shape", None) != (4, 4):
+            return None
+        if np.allclose(m, np.eye(4), atol=1e-9):
+            return None
+        return m
 
     @staticmethod
     def _cloud_to_array(msg) -> np.ndarray:

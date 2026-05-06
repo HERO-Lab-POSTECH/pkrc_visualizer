@@ -66,6 +66,26 @@ def test_identity_when_lookup_returns_none(slam_page, fake_ros_client):
     assert captured_pose[0][0] == (1.0, 0.0, 0.0)
 
 
+def test_identity_tf_falls_back_to_odom_frame(slam_page, fake_ros_client):
+    """fast-lio publishes identity `map ← odom` during global grid search
+    (before /initialpose). Treat identity as no-TF so cloud stays visible in
+    odom frame — otherwise the user has nothing to aim at when picking pose."""
+    fake_ros_client.lookup_map_from_odom.return_value = np.eye(4)
+    slam_page._latest["slam_cloud"] = _pointcloud_xyz([[1.0, 0.0, 0.0]])
+    slam_page._latest["pose_odom"] = _odometry(1.0, 0.0)
+
+    captured_pts = []
+    captured_pose = []
+    slam_page._view.append_cloud = lambda pts, color="#4fc3f7": captured_pts.append(pts.copy())
+    slam_page._view.update_robot_pose = lambda p, q: captured_pose.append((p, q))
+
+    slam_page.refresh()
+
+    assert len(captured_pts) == 1
+    assert np.allclose(captured_pts[0][0], [1.0, 0.0, 0.0])
+    assert captured_pose[0][0] == (1.0, 0.0, 0.0)
+
+
 def test_transform_applied_when_lookup_returns_matrix(slam_page, fake_ros_client):
     """`map ← odom` = +y by 5m. Cloud at odom (1, 0, 0) lands at map (1, 5, 0)."""
     m = np.eye(4)
