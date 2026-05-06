@@ -43,10 +43,15 @@ class SlamPage(BasePage):
         return topic_id in {"slam_cloud", "slam_path", "pose_odom", "slam_prior_grid"}
 
     def refresh(self) -> None:
+        tf_matrix = self._ros_client.lookup_map_from_odom()  # None ⇒ identity
+
         cloud_msg = self._latest.pop("slam_cloud", None)
         if cloud_msg is not None:
             pts = self._cloud_to_array(cloud_msg)
             if pts.size:
+                if tf_matrix is not None:
+                    from pkrc_visualizer.tf_transform import apply_to_points
+                    pts = apply_to_points(tf_matrix, pts)
                 self._view.append_cloud(pts, color="#4fc3f7")
                 if not self._has_set_camera:
                     self._view.reset_camera()
@@ -56,7 +61,12 @@ class SlamPage(BasePage):
         if odom_msg is not None:
             p = odom_msg.pose.pose.position
             q = odom_msg.pose.pose.orientation
-            self._view.update_robot_pose((p.x, p.y, p.z), (q.x, q.y, q.z, q.w))
+            position = (p.x, p.y, p.z)
+            quaternion = (q.x, q.y, q.z, q.w)
+            if tf_matrix is not None:
+                from pkrc_visualizer.tf_transform import apply_to_pose
+                position, quaternion = apply_to_pose(tf_matrix, position, quaternion)
+            self._view.update_robot_pose(position, quaternion)
 
         grid_msg = self._latest.pop("slam_prior_grid", None)
         if grid_msg is not None:
