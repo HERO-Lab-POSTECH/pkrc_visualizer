@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Type
 
 from sensor_msgs.msg import PointCloud2
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from std_msgs.msg import Float32
 from visualization_msgs.msg import MarkerArray
 
@@ -13,7 +13,9 @@ class TopicSpec:
     topic_id: str       # Routing key inside a page (e.g. "slam_cloud")
     topic_name: str     # ROS2 topic name
     msg_type: Type      # Message class
-    qos_best_effort: bool = False  # If True, subscribe with BEST_EFFORT QoS
+    qos_best_effort: bool = False        # If True, subscribe with BEST_EFFORT QoS
+    qos_transient_local: bool = False    # If True, subscribe with TRANSIENT_LOCAL durability
+                                         # (latched publishers like prior maps)
 
 
 # Page key → list of topics
@@ -21,6 +23,8 @@ TOPICS = {
     "slam": [
         TopicSpec("slam_cloud", "/fast_lio/debug/points_world", PointCloud2, qos_best_effort=True),
         TopicSpec("slam_path", "/fast_lio/debug/path", Path, qos_best_effort=True),
+        TopicSpec("slam_prior_grid", "/localization/fast_lio_loc/occupancy_grid",
+                  OccupancyGrid, qos_transient_local=True),
     ],
     "pose": [
         TopicSpec("pose_odom", "/localization/fast_lio/odometry", Odometry),
