@@ -1,10 +1,12 @@
 """SLAM page — accumulate /fast_lio/debug/points_world (world frame) +
-overlay map-origin/robot-frame axes + optional OccupancyGrid prior map."""
+overlay map-origin/robot-frame axes + optional OccupancyGrid prior map +
+2D Pose Estimate toggle (click+drag on ground plane)."""
 import numpy as np
-from PyQt5.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QAction, QToolBar, QVBoxLayout
 from sensor_msgs_py import point_cloud2
 
 from pkrc_visualizer.pages.base_page import BasePage
+from pkrc_visualizer.widgets.pose_estimate_tool import PoseEstimateTool
 from pkrc_visualizer.widgets.pyvista_view import PyVistaView
 
 
@@ -14,14 +16,25 @@ class SlamPage(BasePage):
         self._view = PyVistaView()
         self._store = display_store
 
+        toolbar = QToolBar(self)
+        self._pose_estimate_action = QAction("Pose Estimate", self)
+        self._pose_estimate_action.setCheckable(True)
+        self._pose_estimate_action.toggled.connect(self._on_pose_estimate_toggled)
+        toolbar.addAction(self._pose_estimate_action)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(toolbar)
         layout.addWidget(self._view)
 
         self._has_set_camera = False
         self._install_settings_panel(
             self._view, page_key="slam", store=display_store,
             include_decay=True, include_prior_map=True)
+
+        self._pose_tool = PoseEstimateTool(
+            self._view, on_pose_picked=self._on_pose_picked)
 
         display_store.changed.connect(self._on_settings_changed)
         self._apply_prior_map_settings(display_store.get("slam"))
@@ -51,6 +64,18 @@ class SlamPage(BasePage):
             if settings.prior_map.show:
                 self._view.set_occupancy_grid(grid_msg)
 
+    def _on_pose_estimate_toggled(self, checked: bool) -> None:
+        if checked:
+            self._view.push_camera()
+            self._view.force_top_down()
+            self._pose_tool.attach()
+        else:
+            self._pose_tool.detach()
+            self._view.pop_camera()
+
+    def _on_pose_picked(self, x: float, y: float, yaw: float) -> None:
+        self._ros_client.publish_initialpose(x, y, yaw)
+
     def _on_settings_changed(self, page_key, settings) -> None:
         if page_key == "slam":
             self._apply_prior_map_settings(settings)
@@ -61,6 +86,12 @@ class SlamPage(BasePage):
             self._view.set_prior_grid_alpha(pm.alpha)
         else:
             self._view.clear_occupancy_grid()
+
+    def hideEvent(self, event) -> None:
+        # Force OFF before parent hideEvent stops the timer.
+        if self._pose_estimate_action.isChecked():
+            self._pose_estimate_action.setChecked(False)
+        super().hideEvent(event)
 
     @staticmethod
     def _cloud_to_array(msg) -> np.ndarray:
