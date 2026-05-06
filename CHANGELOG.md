@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.7.0] — 2026-05-06
+
+### Added
+- SLAM 페이지가 `map ← odom` TF를 매 프레임 lookup하여 누적 클라우드와
+  base_link triad를 map frame으로 렌더. localization 모드에서 "2D Pose
+  Estimate" 클릭 시 RViz와 동일하게 클라우드/triad가 map frame 안에서
+  점프하여 사용자가 정합 상태를 즉시 확인할 수 있음.
+- `pkrc_visualizer.tf_transform` 모듈: `transform_to_matrix`,
+  `apply_to_points`, `apply_to_pose` (pure-numpy, 헤드리스 테스트 가능).
+
+### Changed
+- `RosClient`가 `tf2_ros.Buffer` + `TransformListener`를 보유. 신규 메서드
+  `lookup_map_from_odom() -> Optional[np.ndarray]`로 4×4 행렬을 반환.
+  TF가 없으면 `None` → identity fallback.
+- `SlamPage.refresh()`가 cloud chunk와 odom pose를 forwarding 전에 transform.
+  mapping 모드(TF 없음)는 동작 변화 없음.
+
+### Verification
+- colcon build PASS
+- pytest PASS (132 tests, 신규 9개 + 기존 회귀 모두 통과)
+- 수동 (PR description 체크박스): localization bag 재생 → 2D Pose Estimate
+  클릭 시 cloud/triad 점프 확인. mapping bag 재생 시 회귀 없음.
+
+### Notes
+- 다른 패키지(fast-lio, sensor_packages 등)의 frame_id, topic 이름,
+  메시지 타입, QoS는 일절 변경하지 않음. 적응은 visualizer 내부 lookup으로만.
+- `tf_transformations` 패키지 의존을 피하기 위해 4×4 builder를 numpy로
+  자체 구현 (Humble 기본에 없는 경우가 있음).
+
 ## [0.6.0] — 2026-05-06
 
 ### Added

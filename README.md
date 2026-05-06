@@ -67,6 +67,20 @@ SLAM 및 Sonar Mapping 페이지의 3D 뷰포트 좌측 하단에 ⚙ 버튼이 
 `fast-lio`의 `localization_node`가 이미 `/initialpose`를 구독 중이므로 RViz
 없이도 단독으로 초기 위치 입력이 가능하다.
 
+## TF-aware SLAM Rendering (v0.7.0)
+
+SLAM 페이지가 `tf2_ros.TransformListener`로 `map ← odom` 변환을 구독하여
+매 프레임 누적 클라우드와 `base_link` triad를 **map frame**에서 렌더링한다.
+
+- localization 모드: 2D Pose Estimate 클릭 → fast-lio의 `mat_odom2map_`이
+  업데이트되고 그 변환이 곧바로 visualizer에 반영됨. RViz와 동일하게
+  화면 안에서 cloud와 triad가 새 위치로 점프한다.
+- mapping 모드: `map → odom` TF가 없으므로 lookup이 `None`을 반환하고
+  identity fallback이 적용 (즉, odom 프레임 그대로 렌더). v0.6.0과 동일.
+
+다른 패키지(`fast_lio` 등)의 frame_id, topic 이름, 메시지 타입은 일절
+변경하지 않는다. 적응은 visualizer 내부에서만 이루어진다.
+
 ## Image Page Workflow (v0.5.0 — rqt-style)
 
 `Sonar Image` 페이지는 자유 배치 dock 영역입니다. 고정 layout 모드
