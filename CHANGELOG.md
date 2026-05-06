@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] — Post-Audit Fix PR-E (fix)
+
+### Fixed
+- `pages/image_page.py` — image topic subscription used hardcoded "Image" key in MSG_TYPE_MAP, so CompressedImage topics could not actually receive messages despite being selectable. Now resolves the actual msg type from the discovered topic info before subscribing. `_persist()` records the resolved type instead of the literal "Image" string. (M-3)
+
+### Verification
+- colcon build PASS (no python compile errors)
+- Manual UI smoke deferred to user.
+
+---
+
 ## [Unreleased] — Post-Audit Fix B-5 (fix)
 
 ### Fixed
