@@ -22,7 +22,7 @@ class TopicSpec:
 TOPICS = {
     "slam": [
         TopicSpec("slam_cloud", "/fast_lio/debug/points_world", PointCloud2, qos_best_effort=True),
-        TopicSpec("slam_path", "/fast_lio/debug/path", Path),
+        TopicSpec("slam_path", "/fast_lio/debug/path", Path, qos_best_effort=True),
         TopicSpec("slam_prior_grid", "/localization/fast_lio_loc/occupancy_grid",
                   OccupancyGrid, qos_transient_local=True),
     ],
