@@ -17,6 +17,8 @@ import vtk
 from PyQt5.QtWidgets import QVBoxLayout, QWidget
 from pyvistaqt import QtInteractor
 
+from pkrc_visualizer.widgets.prior_map_actor import PriorMapActor
+
 pv.global_theme.allow_empty_mesh = True
 
 
@@ -218,6 +220,8 @@ class PyVistaView(QWidget):
         self._cube_axes = cube_axes
         self._last_grid_update = 0.0
         self._cur_grid_bounds = (-1.0, 1.0, -1.0, 1.0, -1.0, 1.0)
+        self._prior_map = PriorMapActor(self._plotter)
+        self._camera_stack: list[tuple] = []  # (position, focal_point, view_up) snapshots
 
     def _set_actor_points(self, actor, points, keepalive_dict):
         """Re-attach a new PolyData to the actor's mapper.
@@ -326,6 +330,41 @@ class PyVistaView(QWidget):
 
     def reset_camera(self):
         self._plotter.reset_camera()
+
+    def set_occupancy_grid(self, msg) -> None:
+        self._prior_map.set_grid(msg)
+
+    def clear_occupancy_grid(self) -> None:
+        self._prior_map.clear()
+
+    def set_prior_grid_alpha(self, alpha: float) -> None:
+        self._prior_map.set_alpha(alpha)
+
+    def restore_prior_grid_if_cleared(self) -> None:
+        self._prior_map.restore_if_cleared()
+
+    def push_camera(self) -> None:
+        cam = self._plotter.camera
+        self._camera_stack.append(
+            (tuple(cam.position), tuple(cam.focal_point), tuple(cam.up)))
+
+    def pop_camera(self) -> None:
+        if not self._camera_stack:
+            return
+        pos, focal, up = self._camera_stack.pop()
+        cam = self._plotter.camera
+        cam.position = pos
+        cam.focal_point = focal
+        cam.up = up
+        self._plotter.render()
+
+    def force_top_down(self, height_m: float = 30.0) -> None:
+        cam = self._plotter.camera
+        fx, fy, fz = cam.focal_point
+        cam.position = (fx, fy, fz + height_m)
+        cam.up = (0.0, 1.0, 0.0)
+        cam.parallel_projection = True
+        self._plotter.render()
 
     @staticmethod
     def _hex_to_rgb01(color_hex: str) -> tuple[float, float, float]:

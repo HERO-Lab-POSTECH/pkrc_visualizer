@@ -2,11 +2,17 @@
 import threading
 from typing import Any, Iterable, Optional
 
+import numpy as np
 import rclpy
+import tf2_ros
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.time import Time
 
 from pkrc_visualizer.qos import RELIABLE_QOS, SENSOR_QOS
+from pkrc_visualizer.tf_transform import transform_to_matrix
 from pkrc_visualizer.topic_config import TopicSpec
 
 
@@ -34,6 +40,9 @@ class RosClient(QObject):
         # topic_name → (subscription_handle, ref_count)
         self._tid_to_topic: dict[str, str] = {}
         self._tid_seq = 0
+        self._initialpose_pub: Optional[Any] = None
+        self._tf_buffer: Optional[tf2_ros.Buffer] = None
+        self._tf_listener: Optional[tf2_ros.TransformListener] = None
 
     def start(self) -> None:
         if not rclpy.ok():
@@ -47,12 +56,23 @@ class RosClient(QObject):
         )
         for spec in self._specs:
             self._subscribe(spec)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self._node)
         self._executor_thread = threading.Thread(target=self._spin_loop, daemon=True)
         self._executor_thread.start()
 
     def _subscribe(self, spec: TopicSpec) -> None:
         assert self._node is not None, "RosClient.start() must be called first."
-        qos = SENSOR_QOS if spec.qos_best_effort else RELIABLE_QOS
+        # Workspace-standard QoS profiles (spec §2.4). transient_local is a
+        # separate axis (latched publishers like OccupancyGrid prior maps),
+        # so build a custom profile when the spec asks for it.
+        if spec.qos_transient_local:
+            qos = QoSProfile(depth=10)
+            qos.reliability = (ReliabilityPolicy.BEST_EFFORT if spec.qos_best_effort
+                               else ReliabilityPolicy.RELIABLE)
+            qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
+        else:
+            qos = SENSOR_QOS if spec.qos_best_effort else RELIABLE_QOS
         self._node.create_subscription(
             spec.msg_type, spec.topic_name,
             lambda msg, tid=spec.topic_id: self._on_msg(tid, msg),
@@ -166,6 +186,59 @@ class RosClient(QObject):
                 with self._cache_lock:
                     self._cache[tid] = msg
                 self.message_received.emit(tid, msg)
+
+    def publish_initialpose(self, x: float, y: float, yaw: float) -> None:
+        """Publish a 2D pose estimate to /initialpose (RViz-compatible).
+
+        frame_id = "map", z = 0, covariance uses RViz defaults
+        (xx=0.25, yy=0.25, yaw=0.06853891945200942).
+        """
+        import math
+        from geometry_msgs.msg import PoseWithCovarianceStamped
+        if self._node is None:
+            return
+        if self._initialpose_pub is None:
+            self._initialpose_pub = self._node.create_publisher(
+                PoseWithCovarianceStamped, "/initialpose", 10)
+        msg = PoseWithCovarianceStamped()
+        msg.header.frame_id = "map"
+        msg.header.stamp = self._node.get_clock().now().to_msg()
+        msg.pose.pose.position.x = float(x)
+        msg.pose.pose.position.y = float(y)
+        msg.pose.pose.position.z = 0.0
+        msg.pose.pose.orientation.x = 0.0
+        msg.pose.pose.orientation.y = 0.0
+        msg.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        msg.pose.pose.orientation.w = math.cos(yaw / 2.0)
+        cov = [0.0] * 36
+        cov[0] = 0.25                  # xx
+        cov[7] = 0.25                  # yy
+        cov[35] = 0.06853891945200942  # yaw-yaw (RViz default)
+        msg.pose.covariance = cov
+        self._initialpose_pub.publish(msg)
+
+    def lookup_map_from_odom(self) -> Optional[np.ndarray]:
+        """Return the latest `map ← odom` transform as a 4×4 numpy matrix.
+
+        Returns None if the buffer has not yet seen a `map → odom` TF
+        (e.g. mapping mode, or localization mode before the first
+        `mat_odom2map_` rebroadcast). Callers should treat that as
+        "render in odom frame" (identity fallback).
+        """
+        if self._tf_buffer is None:
+            return None
+        try:
+            ts = self._tf_buffer.lookup_transform(
+                "map", "odom", Time(), timeout=Duration(seconds=0.0))
+        except (tf2_ros.LookupException, tf2_ros.ExtrapolationException,
+                tf2_ros.ConnectivityException, tf2_ros.TransformException):
+            return None
+        t = ts.transform.translation
+        r = ts.transform.rotation
+        return transform_to_matrix(
+            translation=(t.x, t.y, t.z),
+            quaternion=(r.x, r.y, r.z, r.w),
+        )
 
     def stop(self) -> None:
         self._stop_event.set()
