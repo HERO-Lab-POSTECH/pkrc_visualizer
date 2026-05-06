@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.6.0] — 2026-05-06
+
+### Added
+- SLAM 페이지: fast-lio localization 모드의 OccupancyGrid prior map을 z=0
+  평면(map frame)에 텍스처로 표시. `vtkImageActor` + nearest-neighbor 보간.
+- SLAM 페이지: "Pose Estimate" toolbar 토글. ON 시 카메라가 top-down으로 강제
+  전환되고 좌클릭+드래그로 (x, y, yaw)를 입력 → `/initialpose`
+  (`geometry_msgs/PoseWithCovarianceStamped`) publish. 모드 해제 시 직전 시점
+  복원. RViz의 "2D Pose Estimate"와 100% 호환.
+- 설정 패널 SLAM 탭에 "Prior Map" 그룹 추가: `show` 토글, `alpha` 슬라이더
+  (0–1, 기본 0.7). `~/.config/pkrc_visualizer/display_settings.yaml`의
+  `slam.prior_map`에 영속.
+
+### Changed
+- `RosClient`가 `qos_transient_local=True` TopicSpec에 대해 transient_local
+  durability로 구독 (latched publisher 호환).
+- `RosClient`에 `publish_initialpose(x, y, yaw)` 메서드 추가.
+- `panel_tabs(include_decay, include_prior_map=False)` — 옵션 인자로 prior_map
+  탭을 활성화.
+
+### Verification
+- colcon build PASS (pkrc_visualizer)
+- pytest PASS (모든 신규 테스트 + 기존 회귀, 120 tests)
+- 수동: localization mode bag 재생 시 평면 정상 표시, 클릭+드래그로 fast-lio
+  위치 jump 확인 (PR description에 스크린샷 첨부)
+
+### Notes
+- 3D prior map (`/localization/fast_lio_loc/map`) 표시는 누적 클라우드와의 시각
+  충돌 회피를 위해 본 릴리즈에서 제외 (후속 phase).
+- C++ 전환은 별도 의제 — 현 시점 실시간성 병목이 측정되지 않음.
+
 ## [Unreleased] — Post-Audit Fix B-5 (fix)
 
 ### Fixed
