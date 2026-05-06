@@ -60,16 +60,28 @@ def cloud_schema(include_decay: bool) -> list[FieldSpec]:
     return fields_
 
 
+def prior_map_schema() -> list[FieldSpec]:
+    return [
+        FieldSpec("prior_map.show", "Show on ground plane", "checkbox"),
+        FieldSpec("prior_map.alpha", "Alpha", "slider",
+                  {"min": 0.0, "max": 1.0, "step": 0.05}),
+    ]
+
+
 def background_schema() -> list[FieldSpec]:
     return [
         FieldSpec("background", "Background color", "color"),
     ]
 
 
-def panel_tabs(include_decay: bool) -> list[tuple[str, str, list[FieldSpec]]]:
+def panel_tabs(include_decay: bool, include_prior_map: bool = False
+               ) -> list[tuple[str, str, list[FieldSpec]]]:
     """Return (tab_id, tab_label, fields) triples in display order."""
-    return [
+    tabs = [
         ("frames", "Frames", frames_schema()),
         ("cloud", "Cloud", cloud_schema(include_decay)),
-        ("background", "Background", background_schema()),
     ]
+    if include_prior_map:
+        tabs.append(("prior_map", "Prior Map", prior_map_schema()))
+    tabs.append(("background", "Background", background_schema()))
+    return tabs
