@@ -284,3 +284,26 @@ def test_image_legacy_keys_drop_silently(tmp_path: Path):
     assert not hasattr(loaded["image"].image, "layout")
     assert not hasattr(loaded["image"].image, "splitter_state")
 
+
+def test_prior_map_defaults():
+    s = PageDisplaySettings()
+    assert s.prior_map.show is True
+    assert abs(s.prior_map.alpha - 0.7) < 1e-9
+
+
+def test_prior_map_round_trip(tmp_path: Path):
+    s = PageDisplaySettings()
+    s.prior_map.show = False
+    s.prior_map.alpha = 0.3
+    save_yaml(tmp_path / "x.yaml", {"slam": s})
+    loaded = load_yaml(tmp_path / "x.yaml")
+    assert loaded["slam"].prior_map.show is False
+    assert abs(loaded["slam"].prior_map.alpha - 0.3) < 1e-9
+
+
+def test_prior_map_missing_section_uses_defaults():
+    """Old YAML with no `prior_map` key still loads; defaults filled in."""
+    s = settings_from_dict({"frames": {}, "cloud": {}, "background": "#000000"})
+    assert s.prior_map.show is True
+    assert abs(s.prior_map.alpha - 0.7) < 1e-9
+

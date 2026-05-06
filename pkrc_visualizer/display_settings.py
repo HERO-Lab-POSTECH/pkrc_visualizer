@@ -40,6 +40,12 @@ class CloudSettings:
 
 
 @dataclass
+class PriorMapSettings:
+    show: bool = True
+    alpha: float = 0.7
+
+
+@dataclass
 class ImagePanelSettings:
     topic_name: str = ""
     msg_type: str = "Image"  # "Image" | "CompressedImage"
@@ -60,6 +66,7 @@ class PageDisplaySettings:
     background: str = "#1e1e1e"
     frames: FramesSettings = field(default_factory=FramesSettings)
     cloud: CloudSettings = field(default_factory=CloudSettings)
+    prior_map: PriorMapSettings = field(default_factory=PriorMapSettings)
     image: ImageLayoutSettings = field(default_factory=ImageLayoutSettings)
 
 
@@ -83,6 +90,8 @@ def _filter_known(cls, data: dict[str, Any]) -> dict[str, Any]:
 def settings_from_dict(d: dict[str, Any]) -> PageDisplaySettings:
     frames = FramesSettings(**_filter_known(FramesSettings, d.get("frames", {})))
     cloud = CloudSettings(**_filter_known(CloudSettings, d.get("cloud", {})))
+    prior_map = PriorMapSettings(
+        **_filter_known(PriorMapSettings, d.get("prior_map", {})))
     image_dict = d.get("image", {})
     if not isinstance(image_dict, dict):
         image_dict = {}
@@ -103,6 +112,7 @@ def settings_from_dict(d: dict[str, Any]) -> PageDisplaySettings:
         background=d.get("background", _DEFAULTS.background),
         frames=frames,
         cloud=cloud,
+        prior_map=prior_map,
         image=image,
     )
 

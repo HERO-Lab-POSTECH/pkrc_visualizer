@@ -189,3 +189,24 @@ def test_settings_button_emits_clicked(qtbot):
     spy = QSignalSpy(btn.clicked)
     btn.click()
     assert len(spy) == 1
+
+
+def test_prior_map_schema_present_when_decay_included():
+    """SLAM tab gets prior-map fields too."""
+    from pkrc_visualizer.widgets.settings_schema import prior_map_schema
+    paths = {f.path for f in prior_map_schema()}
+    assert paths == {"prior_map.show", "prior_map.alpha"}
+
+
+def test_panel_tabs_includes_prior_map_when_decay_included():
+    from pkrc_visualizer.widgets.settings_schema import panel_tabs
+    tabs = panel_tabs(include_decay=True, include_prior_map=True)
+    ids = [t[0] for t in tabs]
+    assert "prior_map" in ids
+
+
+def test_panel_tabs_omits_prior_map_when_disabled():
+    from pkrc_visualizer.widgets.settings_schema import panel_tabs
+    tabs = panel_tabs(include_decay=True, include_prior_map=False)
+    ids = [t[0] for t in tabs]
+    assert "prior_map" not in ids
