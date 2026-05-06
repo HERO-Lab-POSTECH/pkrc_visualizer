@@ -5,7 +5,7 @@ from typing import Any, Iterable, Optional
 import rclpy
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 from pkrc_visualizer.topic_config import TopicSpec
 
@@ -49,6 +49,8 @@ class RosClient(QObject):
         qos = QoSProfile(depth=10)
         if spec.qos_best_effort:
             qos.reliability = ReliabilityPolicy.BEST_EFFORT
+        if spec.qos_transient_local:
+            qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
         self._node.create_subscription(
             spec.msg_type, spec.topic_name,
             lambda msg, tid=spec.topic_id: self._on_msg(tid, msg),
