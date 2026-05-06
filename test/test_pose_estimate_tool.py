@@ -52,3 +52,10 @@ def test_detach_removes_observers(view):
     assert tool._observer_ids
     tool.detach()
     assert not tool._observer_ids
+
+
+def test_observer_priority_above_default_style(view):
+    """Higher priority than the default InteractorStyle (0.0) is what lets
+    AbortFlagOn() actually suppress camera rotation. Regression guard."""
+    from pkrc_visualizer.widgets.pose_estimate_tool import PoseEstimateTool
+    assert PoseEstimateTool._OBSERVER_PRIORITY > 0.0

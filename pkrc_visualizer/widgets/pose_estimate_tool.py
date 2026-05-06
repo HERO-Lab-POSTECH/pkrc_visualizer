@@ -27,23 +27,39 @@ class PoseEstimateTool:
         self._start: Optional[tuple[float, float]] = None
         self._observer_ids: list[int] = []
         self._arrow_actor: Optional[vtk.vtkActor] = None
+        # Saved while attached so detach() can put the user back where they
+        # were. Without this, the default trackball style would race our
+        # observers for LeftButtonRelease and steal it for `EndRotate`.
+        self._saved_style = None
+
+    # Higher than the default InteractorStyle (priority 0.0) so our callbacks
+    # fire FIRST and can AbortFlagOn() to suppress camera rotation on drag.
+    _OBSERVER_PRIORITY = 10.0
 
     def attach(self) -> None:
         if self._observer_ids:
             return
         iren = self._plotter.interactor
-        self._observer_ids.append(
-            iren.AddObserver("LeftButtonPressEvent", self._on_left_press, 1.0))
-        self._observer_ids.append(
-            iren.AddObserver("MouseMoveEvent", self._on_mouse_move, 1.0))
-        self._observer_ids.append(
-            iren.AddObserver("LeftButtonReleaseEvent", self._on_left_release, 1.0))
+        # Swap the default trackball style for an empty one so it never grabs
+        # mouse buttons (avoids LeftButtonRelease being consumed by EndRotate
+        # before our observer fires).
+        self._saved_style = iren.GetInteractorStyle()
+        iren.SetInteractorStyle(vtk.vtkInteractorStyleUser())
+        self._observer_ids.append(iren.AddObserver(
+            "LeftButtonPressEvent", self._on_left_press, self._OBSERVER_PRIORITY))
+        self._observer_ids.append(iren.AddObserver(
+            "MouseMoveEvent", self._on_mouse_move, self._OBSERVER_PRIORITY))
+        self._observer_ids.append(iren.AddObserver(
+            "LeftButtonReleaseEvent", self._on_left_release, self._OBSERVER_PRIORITY))
 
     def detach(self) -> None:
         iren = self._plotter.interactor
         for oid in self._observer_ids:
             iren.RemoveObserver(oid)
         self._observer_ids.clear()
+        if self._saved_style is not None:
+            iren.SetInteractorStyle(self._saved_style)
+            self._saved_style = None
         self._remove_arrow()
         self._start = None
 
@@ -75,6 +91,7 @@ class PoseEstimateTool:
         if world is None:
             return
         self._on_press_world(world[0], world[1])
+        obj.AbortFlagOn()  # block camera rotation start
 
     def _on_mouse_move(self, obj, event) -> None:
         if self._start is None:
@@ -84,6 +101,7 @@ class PoseEstimateTool:
         if world is None:
             return
         self._on_move_world(world[0], world[1])
+        obj.AbortFlagOn()  # block camera rotation while dragging
 
     def _on_left_release(self, obj, event) -> None:
         if self._start is None:
@@ -93,6 +111,7 @@ class PoseEstimateTool:
         if world is None:
             return
         self._on_release_world(world[0], world[1])
+        obj.AbortFlagOn()  # block camera rotation end
 
     # ---- world-coordinate handlers (also unit-test entry points) -------------------
 
