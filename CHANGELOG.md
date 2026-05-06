@@ -1,6 +1,16 @@
 # Changelog
 
-## [Unreleased] — Phase P4d: Topic rename (refactor)
+## [Unreleased] — C-1c: map_markers QoS mismatch fix
+
+### Fixed
+- C-1c: map_markers TopicSpec에 qos_best_effort=True 추가 — map_visualizer_node SENSOR_QOS 발행과 정합
+
+### Verification
+- `colcon build --packages-select pkrc_visualizer` PASS (0.60s)
+
+---
+
+## Phase P4d: Topic rename (refactor)
 
 ### Changed
 - `topic_config.py` — 8 TopicSpec subscriber topic_name 갱신 (spec §2.3):
