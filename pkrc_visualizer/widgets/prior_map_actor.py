@@ -84,6 +84,14 @@ class PriorMapActor:
         if self._last_msg is not None and self._actor is not None:
             self.set_grid(self._last_msg)
 
+    def restore_if_cleared(self) -> None:
+        """Re-create actor from the last seen message.
+
+        Lets `show=False -> show=True` toggling rebuild the plane without
+        needing a fresh OccupancyGrid (transient_local publishes only once)."""
+        if self._actor is None and self._last_msg is not None:
+            self.set_grid(self._last_msg)
+
     @property
     def has_actor(self) -> bool:
         return self._actor is not None

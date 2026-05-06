@@ -340,6 +340,9 @@ class PyVistaView(QWidget):
     def set_prior_grid_alpha(self, alpha: float) -> None:
         self._prior_map.set_alpha(alpha)
 
+    def restore_prior_grid_if_cleared(self) -> None:
+        self._prior_map.restore_if_cleared()
+
     def push_camera(self) -> None:
         cam = self._plotter.camera
         self._camera_stack.append(

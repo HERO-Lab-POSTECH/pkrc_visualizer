@@ -60,3 +60,21 @@ def test_force_top_down_aligns_camera_with_z_axis(view):
     assert abs(px - fx) < 1e-3
     assert abs(py - fy) < 1e-3
     assert pz > fz
+
+
+def test_restore_prior_grid_after_clear(view):
+    """Clearing then restoring rebuilds the actor from the cached message
+    (mimics the show=False -> show=True user flow with no fresh msg)."""
+    view.set_occupancy_grid(_make_grid())
+    assert view._prior_map.has_actor
+    view.clear_occupancy_grid()
+    assert not view._prior_map.has_actor
+    view.restore_prior_grid_if_cleared()
+    assert view._prior_map.has_actor
+
+
+def test_restore_prior_grid_noop_without_message(view):
+    """Restoring before any message ever arrived stays a no-op."""
+    assert not view._prior_map.has_actor
+    view.restore_prior_grid_if_cleared()
+    assert not view._prior_map.has_actor

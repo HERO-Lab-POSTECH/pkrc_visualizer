@@ -83,6 +83,10 @@ class SlamPage(BasePage):
     def _apply_prior_map_settings(self, settings) -> None:
         pm = settings.prior_map
         if pm.show:
+            # Re-create plane from cached message if previously cleared.
+            # OccupancyGrid is transient_local — sent once, so we can't wait
+            # for a fresh message to arrive on toggle-back-on.
+            self._view.restore_prior_grid_if_cleared()
             self._view.set_prior_grid_alpha(pm.alpha)
         else:
             self._view.clear_occupancy_grid()
