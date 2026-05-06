@@ -59,9 +59,17 @@ class BasePage(QWidget):
 
         Applies the store's current values immediately. Wires field
         changes back into the store. Re-applies the snapshot to the view
-        whenever the store emits.
+        whenever the store emits. Rebuilds the cloud tab when the
+        size_unit changes so the slider's path/range/label match the
+        active unit.
         """
-        panel = SettingsPanel(panel_tabs(include_decay, include_prior_map), parent=view)
+        snapshot = store.get(page_key)
+        last_size_unit = snapshot.cloud.size_unit
+        panel = SettingsPanel(
+            panel_tabs(include_decay, last_size_unit,
+                       include_prior_map=include_prior_map),
+            parent=view,
+        )
         button = SettingsButton(view)
 
         def _on_button_clicked():
@@ -73,6 +81,11 @@ class BasePage(QWidget):
             if emitted_key != page_key:
                 return
             view.apply_display_settings(settings)
+            nonlocal last_size_unit
+            new_unit = settings.cloud.size_unit
+            if new_unit != last_size_unit:
+                panel.rebuild_cloud_tab(new_unit)
+                last_size_unit = new_unit
             panel.apply_values(settings)
 
         button.clicked.connect(_on_button_clicked)
@@ -82,6 +95,5 @@ class BasePage(QWidget):
             lambda section: store.reset(page_key, section=section))
         store.changed.connect(_on_store_changed)
 
-        snapshot = store.get(page_key)
         view.apply_display_settings(snapshot)
         panel.apply_values(snapshot)

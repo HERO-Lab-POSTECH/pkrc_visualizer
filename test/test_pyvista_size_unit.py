@@ -8,7 +8,10 @@ from pkrc_visualizer.widgets.pyvista_view import PyVistaView
 def _apply(view, *, size_unit, size=2.0):
     s = PageDisplaySettings()
     s.cloud.size_unit = size_unit
-    s.cloud.size = size
+    if size_unit == "meters":
+        s.cloud.size_meters = size
+    else:
+        s.cloud.size_pixels = size
     view.apply_display_settings(s)
 
 

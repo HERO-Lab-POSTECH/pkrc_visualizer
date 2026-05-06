@@ -1,7 +1,7 @@
 """Declarative schema for SettingsPanel.
 
 Each FieldSpec describes a single form widget. Path uses dotted notation
-matching DisplaySettingsStore.update (e.g. "cloud.size", "background").
+matching DisplaySettingsStore.update (e.g. "cloud.alpha", "background").
 """
 from dataclasses import dataclass, field
 
@@ -33,12 +33,21 @@ def frames_schema() -> list[FieldSpec]:
     ]
 
 
-def cloud_schema(include_decay: bool) -> list[FieldSpec]:
+def cloud_schema(include_decay: bool, size_unit: str) -> list[FieldSpec]:
+    if size_unit == "meters":
+        size_field = FieldSpec(
+            "cloud.size_meters", "Size (m)", "slider",
+            {"min": 0.001, "max": 0.5, "step": 0.001},
+        )
+    else:
+        size_field = FieldSpec(
+            "cloud.size_pixels", "Size (px)", "slider",
+            {"min": 0.1, "max": 20.0, "step": 0.1},
+        )
     fields_: list[FieldSpec] = [
         FieldSpec("cloud.style", "Style", "combobox",
                   {"choices": ["points", "square", "spheres"]}),
-        FieldSpec("cloud.size", "Size (px or m)", "slider",
-                  {"min": 0.01, "max": 20.0, "step": 0.1}),
+        size_field,
         FieldSpec("cloud.size_unit", "Size unit", "combobox",
                   {"choices": ["pixels", "meters"]}),
         FieldSpec("cloud.alpha", "Alpha", "slider",
@@ -74,12 +83,13 @@ def background_schema() -> list[FieldSpec]:
     ]
 
 
-def panel_tabs(include_decay: bool, include_prior_map: bool = False
+def panel_tabs(include_decay: bool, size_unit: str,
+               include_prior_map: bool = False
                ) -> list[tuple[str, str, list[FieldSpec]]]:
     """Return (tab_id, tab_label, fields) triples in display order."""
     tabs = [
         ("frames", "Frames", frames_schema()),
-        ("cloud", "Cloud", cloud_schema(include_decay)),
+        ("cloud", "Cloud", cloud_schema(include_decay, size_unit)),
     ]
     if include_prior_map:
         tabs.append(("prior_map", "Prior Map", prior_map_schema()))

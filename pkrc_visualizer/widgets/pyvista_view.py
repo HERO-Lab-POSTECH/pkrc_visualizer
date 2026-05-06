@@ -461,9 +461,10 @@ class PyVistaView(QWidget):
         # impostor sphere shader (only meaningful in pixel mode).
         self._plotter.render_window.SetPointSmoothing(c.style != "square")
         for actor in (self._cloud_actor, self._accum_actor):
-            self._install_point_mapper(actor, c.size_unit, c.size)
+            size = c.active_size
+            self._install_point_mapper(actor, c.size_unit, size)
             prop = actor.GetProperty()
-            prop.SetPointSize(c.size)        # pixels mode only; gaussian uses SetScaleFactor
+            prop.SetPointSize(size)        # pixels mode only; gaussian uses SetScaleFactor
             prop.SetOpacity(c.alpha)
             prop.SetRenderPointsAsSpheres(
                 c.style == "spheres" and c.size_unit == "pixels")

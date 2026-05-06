@@ -19,14 +19,6 @@ PANEL_MAX_HEIGHT = 760
 ANIMATION_MS = 240
 DEBOUNCE_MS = 200
 
-# Cross-mode safe defaults for cloud.size when the user toggles size_unit.
-# Values that make sense in pixels are 6 orders of magnitude off in meters
-# (and vice versa), so vtkPointGaussianMapper would otherwise paint giant
-# splats and freeze the GPU. The threshold splits the two regimes.
-SIZE_UNIT_SAFE_THRESHOLD = 1.0
-SAFE_SIZE_PIXELS = 2.0
-SAFE_SIZE_METERS = 0.05
-
 
 def _is_light_color(hex_color: str) -> bool:
     """Return True if a `#rrggbb` color is light enough to need dark text."""
@@ -106,6 +98,11 @@ class SettingsPanel(QFrame):
         self._anim = QPropertyAnimation(self, b"geometry")
         self._anim.setDuration(ANIMATION_MS)
         self._anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._include_decay = any(
+            spec.path == "cloud.decay_seconds"
+            for tid, _, fields_ in tabs if tid == "cloud"
+            for spec in fields_
+        )
         self._build_ui(tabs)
 
     # ---- public API -------------------------------------------------
@@ -188,27 +185,47 @@ class SettingsPanel(QFrame):
             w.currentTextChanged.connect(
                 lambda v, p=spec.path: self._emit(p, v))
             if spec.path == "cloud.size_unit":
-                w.currentTextChanged.connect(self._guard_size_on_unit_change)
+                # Defer rebuild to the next event-loop tick: the combobox is a
+                # child of the cloud tab that rebuild_cloud_tab will destroy, and
+                # destroying a widget mid-signal-emission is unsafe in Qt.
+                w.currentTextChanged.connect(
+                    lambda new_unit: QTimer.singleShot(
+                        0, lambda u=new_unit: self.rebuild_cloud_tab(u)))
             return w
         raise ValueError(f"unknown widget kind: {spec.widget}")
 
-    def _guard_size_on_unit_change(self, new_unit: str) -> None:
-        """Clamp cloud.size when the user toggles between pixels/meters.
+    def rebuild_cloud_tab(self, size_unit: str) -> None:
+        """Rebuild the cloud tab's widget tree to match the new size_unit.
 
-        Without this guard, a pixel-mode size of e.g. 10 carries over to
-        meters mode as a 10-metre splat radius, which paints quads
-        covering most of the viewport via vtkPointGaussianMapper and
-        freezes the GPU. The clamp re-emits via the size widget's normal
-        valueChanged path, so the store sees a single coherent update.
+        Triggered when cloud.size_unit changes. The size slider's
+        path/range/label/step differ per unit, so replacing the entire
+        tab is safer than swapping in place — avoids signal/timer
+        reconnection edge cases.
+
+        The caller (base_page._on_store_changed) must call apply_values(page)
+        immediately after to refill the new widgets with current values.
         """
-        size_widget = self._widgets.get("cloud.size")
-        if size_widget is None:
-            return
-        current = size_widget.value()
-        if new_unit == "meters" and current > SIZE_UNIT_SAFE_THRESHOLD:
-            size_widget.setValue(SAFE_SIZE_METERS)
-        elif new_unit == "pixels" and current < SIZE_UNIT_SAFE_THRESHOLD:
-            size_widget.setValue(SAFE_SIZE_PIXELS)
+        from pkrc_visualizer.widgets.settings_schema import cloud_schema
+        cloud_idx = self._tab_id_list.index("cloud")
+        for path in [p for p in self._widgets if p.startswith("cloud.")]:
+            self._widgets.pop(path)
+            timer = self._debounce_timers.pop(path, None)
+            if timer is not None:
+                timer.stop()
+                timer.deleteLater()
+        fields_ = cloud_schema(self._include_decay, size_unit)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        inner = QWidget()
+        form = QFormLayout(inner)
+        for spec in fields_:
+            w = self._make_widget(spec)
+            self._widgets[spec.path] = w
+            form.addRow(QLabel(spec.label), w)
+        scroll.setWidget(inner)
+        self._tabs_widget.removeTab(cloud_idx)
+        self._tabs_widget.insertTab(cloud_idx, scroll, "Cloud")
+        self._tabs_widget.setCurrentIndex(cloud_idx)
 
     # ---- value sync -------------------------------------------------
     @staticmethod
