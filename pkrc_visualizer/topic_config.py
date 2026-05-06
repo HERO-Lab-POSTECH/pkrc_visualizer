@@ -20,13 +20,13 @@ class TopicSpec:
 TOPICS = {
     "slam": [
         TopicSpec("slam_cloud", "/fast_lio/debug/points_world", PointCloud2, qos_best_effort=True),
-        TopicSpec("slam_path", "/fast_lio/debug/path", Path),
+        TopicSpec("slam_path", "/fast_lio/debug/path", Path, qos_best_effort=True),
     ],
     "pose": [
         TopicSpec("pose_odom", "/localization/fast_lio/odometry", Odometry),
         TopicSpec("pose_loc_odom", "/localization/fast_lio_loc/odometry", Odometry),
         TopicSpec("pose_confidence", "/localization/fast_lio_loc/confidence", Float32),
-        TopicSpec("pose_path", "/fast_lio/debug/path", Path),
+        TopicSpec("pose_path", "/fast_lio/debug/path", Path, qos_best_effort=True),
     ],
     "mapping": [
         TopicSpec("map_cloud", "/perception/sonar_3d/points", PointCloud2, qos_best_effort=True),
