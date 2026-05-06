@@ -29,7 +29,9 @@ class FramesSettings:
 @dataclass
 class CloudSettings:
     style: str = "points"            # points | square | spheres
-    size: float = 2.0
+    size: float = 2.0                # legacy (Task 3에서 제거)
+    size_pixels: float = 1.0         # px 모드 사이즈
+    size_meters: float = 0.01        # meter 모드 사이즈
     size_unit: str = "meters"        # pixels | meters
     alpha: float = 1.0
     decay_seconds: float = 30.0      # 0.0 disables decay (accumulate forever, capped by HARD_MAX)
@@ -37,6 +39,10 @@ class CloudSettings:
     flat_color: str = "#4fc3f7"
     color_min: float = 0.0
     color_max: float = 10.0
+
+    @property
+    def active_size(self) -> float:
+        return self.size_meters if self.size_unit == "meters" else self.size_pixels
 
 
 @dataclass

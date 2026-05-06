@@ -307,3 +307,35 @@ def test_prior_map_missing_section_uses_defaults():
     assert s.prior_map.show is True
     assert abs(s.prior_map.alpha - 0.7) < 1e-9
 
+
+def test_cloud_size_per_unit_defaults():
+    s = CloudSettings()
+    assert s.size_pixels == 1.0
+    assert s.size_meters == 0.01
+
+
+def test_active_size_routes_to_meters_when_unit_meters():
+    s = CloudSettings(size_unit="meters", size_pixels=5.0, size_meters=0.03)
+    assert s.active_size == 0.03
+
+
+def test_active_size_routes_to_pixels_when_unit_pixels():
+    s = CloudSettings(size_unit="pixels", size_pixels=5.0, size_meters=0.03)
+    assert s.active_size == 5.0
+
+
+def test_cloud_size_per_unit_yaml_roundtrip(tmp_path: Path):
+    path = tmp_path / "settings.yaml"
+    pages = {
+        "slam": PageDisplaySettings(
+            cloud=CloudSettings(
+                size_unit="pixels", size_pixels=7.0, size_meters=0.04,
+            ),
+        ),
+    }
+    save_yaml(path, pages)
+    loaded = load_yaml(path)
+    assert loaded["slam"].cloud.size_pixels == 7.0
+    assert loaded["slam"].cloud.size_meters == 0.04
+    assert loaded["slam"].cloud.size_unit == "pixels"
+
