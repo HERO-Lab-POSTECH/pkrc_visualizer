@@ -21,8 +21,10 @@ class TopicSpec:
 # Page key → list of topics
 TOPICS = {
     "slam": [
-        TopicSpec("slam_cloud", "/fast_lio/debug/points_world", PointCloud2, qos_best_effort=True),
-        TopicSpec("slam_path", "/fast_lio/debug/path", Path, qos_best_effort=True),
+        # Subscribe to body-frame scan and lift to odom→map in the page using TF.
+        # Avoids dependence on /fast_lio/debug/points_world (which is the same scan
+        # pre-transformed to odom but lives in the debug namespace).
+        TopicSpec("slam_cloud", "/localization/fast_lio/points_body", PointCloud2, qos_best_effort=True),
         TopicSpec("slam_prior_grid", "/localization/fast_lio_loc/occupancy_grid",
                   OccupancyGrid, qos_transient_local=True),
     ],
@@ -30,7 +32,8 @@ TOPICS = {
         TopicSpec("pose_odom", "/localization/fast_lio/odometry", Odometry),
         TopicSpec("pose_loc_odom", "/localization/fast_lio_loc/odometry", Odometry),
         TopicSpec("pose_confidence", "/localization/fast_lio_loc/confidence", Float32),
-        TopicSpec("pose_path", "/fast_lio/debug/path", Path, qos_best_effort=True),
+        # PosePlot accumulates trajectory from pose_odom directly (30s window),
+        # so /fast_lio/debug/path is no longer needed.
     ],
     "mapping": [
         TopicSpec("map_cloud", "/perception/sonar_3d/points", PointCloud2, qos_best_effort=True),

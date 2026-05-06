@@ -1,4 +1,6 @@
-"""Embed matplotlib FigureCanvasQTAgg: XY trajectory + Path overlay."""
+"""Embed matplotlib FigureCanvasQTAgg: XY trajectory built from pose_odom
+over a sliding time window. Window matches the cloud accumulator's
+decay_seconds so path and cloud age together."""
 from collections import deque
 
 import matplotlib
@@ -9,7 +11,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QWidget
 
 
 class PosePlot(QWidget):
-    HISTORY = 10000
+    WINDOW_SECONDS = 30.0
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -20,21 +22,16 @@ class PosePlot(QWidget):
         self._ax.set_ylabel("Y [m]")
         self._ax.set_aspect("equal", adjustable="datalim")
         self._ax.grid(True, alpha=0.3)
-        self._traj_x: deque[float] = deque(maxlen=self.HISTORY)
-        self._traj_y: deque[float] = deque(maxlen=self.HISTORY)
-        self._path_x: list[float] = []
-        self._path_y: list[float] = []
+        self._traj: deque[tuple[float, float, float]] = deque()  # (t, x, y)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._canvas)
 
-    def append_pose(self, x: float, y: float) -> None:
-        self._traj_x.append(x)
-        self._traj_y.append(y)
-
-    def set_path(self, xs: list[float], ys: list[float]) -> None:
-        self._path_x = xs
-        self._path_y = ys
+    def append_pose(self, t: float, x: float, y: float) -> None:
+        self._traj.append((t, x, y))
+        cutoff = t - self.WINDOW_SECONDS
+        while self._traj and self._traj[0][0] < cutoff:
+            self._traj.popleft()
 
     def draw(self) -> None:
         self._ax.clear()
@@ -42,11 +39,10 @@ class PosePlot(QWidget):
         self._ax.set_ylabel("Y [m]")
         self._ax.set_aspect("equal", adjustable="datalim")
         self._ax.grid(True, alpha=0.3)
-        if self._path_x:
-            self._ax.plot(self._path_x, self._path_y, color="#888", linewidth=1, label="path")
-        if self._traj_x:
-            self._ax.plot(list(self._traj_x), list(self._traj_y), color="#1976d2", linewidth=2, label="odom")
-            self._ax.scatter([self._traj_x[-1]], [self._traj_y[-1]], color="#d32f2f", s=40, zorder=3)
-        if self._traj_x or self._path_x:
+        if self._traj:
+            xs = [x for _, x, _ in self._traj]
+            ys = [y for _, _, y in self._traj]
+            self._ax.plot(xs, ys, color="#1976d2", linewidth=2, label="path")
+            self._ax.scatter([xs[-1]], [ys[-1]], color="#d32f2f", s=40, zorder=3)
             self._ax.legend(loc="upper right", fontsize=8)
         self._canvas.draw_idle()

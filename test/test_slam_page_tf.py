@@ -8,9 +8,16 @@ import pytest
 
 @pytest.fixture
 def fake_ros_client():
-    """A stub RosClient that exposes lookup_map_from_odom + a no-op subscribe API."""
+    """A stub RosClient that exposes the two TF lookups + a no-op subscribe API.
+
+    Default `lookup_odom_from_base` is identity so existing tests, which
+    feed cloud points already expressed in the desired frame, behave as if
+    the body→odom step is a no-op. Override per-test if a non-identity
+    base→odom transform is being asserted.
+    """
     client = MagicMock()
     client.lookup_map_from_odom.return_value = None  # default: mapping mode
+    client.lookup_odom_from_base.return_value = np.eye(4)
     return client
 
 
@@ -107,3 +114,34 @@ def test_transform_applied_when_lookup_returns_matrix(slam_page, fake_ros_client
     p, _ = captured_pose[0]
     assert abs(p[0] - 1.0) < 1e-6
     assert abs(p[1] - 5.0) < 1e-6
+
+
+def test_base_to_odom_transform_lifts_body_frame_cloud(slam_page, fake_ros_client):
+    """`odom ← base_link` = +x by 2m. Body-frame point (0, 0, 0) lands at odom (2, 0, 0)."""
+    odom_from_base = np.eye(4)
+    odom_from_base[0, 3] = 2.0
+    fake_ros_client.lookup_odom_from_base.return_value = odom_from_base
+    fake_ros_client.lookup_map_from_odom.return_value = None  # mapping mode
+    slam_page._latest["slam_cloud"] = _pointcloud_xyz([[0.0, 0.0, 0.0]])
+
+    captured_pts = []
+    slam_page._view.append_cloud = lambda pts, color="#4fc3f7": captured_pts.append(pts.copy())
+
+    slam_page.refresh()
+
+    assert len(captured_pts) == 1
+    assert np.allclose(captured_pts[0][0], [2.0, 0.0, 0.0])
+
+
+def test_cloud_dropped_when_odom_from_base_unavailable(slam_page, fake_ros_client):
+    """If TF for the scan timestamp is missing, the page must drop the frame
+    rather than render with a stale or wrong transform. The next sample retries."""
+    fake_ros_client.lookup_odom_from_base.return_value = None
+    slam_page._latest["slam_cloud"] = _pointcloud_xyz([[1.0, 0.0, 0.0]])
+
+    captured_pts = []
+    slam_page._view.append_cloud = lambda pts, color="#4fc3f7": captured_pts.append(pts.copy())
+
+    slam_page.refresh()
+
+    assert captured_pts == []

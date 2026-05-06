@@ -240,6 +240,29 @@ class RosClient(QObject):
             quaternion=(r.x, r.y, r.z, r.w),
         )
 
+    def lookup_odom_from_base(self, stamp) -> Optional[np.ndarray]:
+        """Return `odom ← base_link` at message timestamp as 4×4 numpy matrix.
+
+        Used to lift base_link-frame point clouds (e.g. /localization/fast_lio/points_body)
+        into odom frame. Returns None if TF for that timestamp is unavailable —
+        caller should drop the frame; the next sample retries.
+        """
+        if self._tf_buffer is None:
+            return None
+        try:
+            ts = self._tf_buffer.lookup_transform(
+                "odom", "base_link", Time.from_msg(stamp),
+                timeout=Duration(seconds=0.0))
+        except (tf2_ros.LookupException, tf2_ros.ExtrapolationException,
+                tf2_ros.ConnectivityException, tf2_ros.TransformException):
+            return None
+        t = ts.transform.translation
+        r = ts.transform.rotation
+        return transform_to_matrix(
+            translation=(t.x, t.y, t.z),
+            quaternion=(r.x, r.y, r.z, r.w),
+        )
+
     def stop(self) -> None:
         self._stop_event.set()
         if self._executor_thread is not None:

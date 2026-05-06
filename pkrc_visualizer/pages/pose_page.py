@@ -1,4 +1,9 @@
-"""Pose / Path page: XY trajectory + confidence label."""
+"""Pose / Path page: XY trajectory (built from pose_odom over a 30s window)
++ confidence label. The trajectory replaces the old /fast_lio/debug/path
+subscription — odometry already streams every pose, and PosePlot now
+expires older entries by time so memory stays bounded."""
+from time import monotonic
+
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
 
 from pkrc_visualizer.pages.base_page import BasePage
@@ -24,13 +29,15 @@ class PosePage(BasePage):
         layout.addWidget(self._plot, stretch=1)
 
     def _is_my_topic(self, topic_id: str) -> bool:
-        return topic_id in {"pose_odom", "pose_loc_odom", "pose_confidence", "pose_path"}
+        return topic_id in {"pose_odom", "pose_loc_odom", "pose_confidence"}
 
     def _on_message(self, topic_id: str, msg) -> None:
         super()._on_message(topic_id, msg)
         if topic_id == "pose_odom":
             p = msg.pose.pose.position
-            self._plot.append_pose(p.x, p.y)
+            # monotonic() matches the cloud accumulator's clock so the path
+            # window and cloud decay age together.
+            self._plot.append_pose(monotonic(), p.x, p.y)
 
     def refresh(self) -> None:
         odom = self._latest.get("pose_odom")
@@ -46,11 +53,5 @@ class PosePage(BasePage):
         conf = self._latest.get("pose_confidence")
         if conf is not None:
             self._confidence_label.setText(f"Confidence: {conf.data:.3f}")
-
-        path = self._latest.get("pose_path")
-        if path is not None:
-            xs = [pose.pose.position.x for pose in path.poses]
-            ys = [pose.pose.position.y for pose in path.poses]
-            self._plot.set_path(xs, ys)
 
         self._plot.draw()
