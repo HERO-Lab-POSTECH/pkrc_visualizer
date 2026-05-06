@@ -95,7 +95,27 @@ def _filter_known(cls, data: dict[str, Any]) -> dict[str, Any]:
 
 def settings_from_dict(d: dict[str, Any]) -> PageDisplaySettings:
     frames = FramesSettings(**_filter_known(FramesSettings, d.get("frames", {})))
-    cloud = CloudSettings(**_filter_known(CloudSettings, d.get("cloud", {})))
+
+    cloud_raw = d.get("cloud", {})
+    if not isinstance(cloud_raw, dict):
+        cloud_raw = {}
+    # Legacy migration: pre-0.8 had a single `size` field whose meaning
+    # depended on `size_unit`. Map it to whichever side of the new split
+    # was active; leave the other side at its default. New keys win if
+    # both are present.
+    if (
+        "size" in cloud_raw
+        and "size_pixels" not in cloud_raw
+        and "size_meters" not in cloud_raw
+    ):
+        legacy_size = cloud_raw.pop("size")
+        unit = cloud_raw.get("size_unit", _DEFAULTS.cloud.size_unit)
+        if unit == "meters":
+            cloud_raw["size_meters"] = legacy_size
+        else:
+            cloud_raw["size_pixels"] = legacy_size
+    cloud = CloudSettings(**_filter_known(CloudSettings, cloud_raw))
+
     prior_map = PriorMapSettings(
         **_filter_known(PriorMapSettings, d.get("prior_map", {})))
     image_dict = d.get("image", {})

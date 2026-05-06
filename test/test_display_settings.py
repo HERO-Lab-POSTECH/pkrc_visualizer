@@ -339,3 +339,31 @@ def test_cloud_size_per_unit_yaml_roundtrip(tmp_path: Path):
     assert loaded["slam"].cloud.size_meters == 0.04
     assert loaded["slam"].cloud.size_unit == "pixels"
 
+
+def test_cloud_size_legacy_migration_meters():
+    """legacy {size: 4.0, size_unit: meters} → size_meters=4.0, size_pixels=default(1.0)."""
+    s = settings_from_dict({"cloud": {"size": 4.0, "size_unit": "meters"}})
+    assert s.cloud.size_meters == 4.0
+    assert s.cloud.size_pixels == 1.0      # default
+    assert s.cloud.size_unit == "meters"
+
+
+def test_cloud_size_legacy_migration_pixels():
+    """legacy {size: 8.0, size_unit: pixels} → size_pixels=8.0, size_meters=default(0.01)."""
+    s = settings_from_dict({"cloud": {"size": 8.0, "size_unit": "pixels"}})
+    assert s.cloud.size_pixels == 8.0
+    assert s.cloud.size_meters == 0.01     # default
+    assert s.cloud.size_unit == "pixels"
+
+
+def test_cloud_size_legacy_ignored_when_new_present():
+    """신/구 키가 모두 있으면 새 키 우선, legacy size는 무시."""
+    s = settings_from_dict({"cloud": {
+        "size": 99.0,
+        "size_pixels": 3.0,
+        "size_meters": 0.02,
+        "size_unit": "pixels",
+    }})
+    assert s.cloud.size_pixels == 3.0
+    assert s.cloud.size_meters == 0.02
+
