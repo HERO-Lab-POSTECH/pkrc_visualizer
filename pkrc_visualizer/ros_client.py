@@ -5,8 +5,8 @@ from typing import Any, Iterable, Optional
 import rclpy
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
 
+from pkrc_visualizer.qos import RELIABLE_QOS, SENSOR_QOS
 from pkrc_visualizer.topic_config import TopicSpec
 
 
@@ -52,9 +52,7 @@ class RosClient(QObject):
 
     def _subscribe(self, spec: TopicSpec) -> None:
         assert self._node is not None, "RosClient.start() must be called first."
-        qos = QoSProfile(depth=10)
-        if spec.qos_best_effort:
-            qos.reliability = ReliabilityPolicy.BEST_EFFORT
+        qos = SENSOR_QOS if spec.qos_best_effort else RELIABLE_QOS
         self._node.create_subscription(
             spec.msg_type, spec.topic_name,
             lambda msg, tid=spec.topic_id: self._on_msg(tid, msg),
@@ -138,7 +136,7 @@ class RosClient(QObject):
             self._dynamic_subs[topic_name] = (sub, count + 1)
         else:
             assert self._node is not None, "RosClient.start() must precede subscribe_dynamic()"
-            qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+            qos = SENSOR_QOS
             sub = self._node.create_subscription(
                 msg_type, topic_name,
                 lambda msg, name=topic_name: self._on_dynamic_msg(name, msg),
