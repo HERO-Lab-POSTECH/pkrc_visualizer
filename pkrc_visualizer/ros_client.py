@@ -38,7 +38,13 @@ class RosClient(QObject):
     def start(self) -> None:
         if not rclpy.ok():
             raise RuntimeError("rclpy.init() must be called first.")
-        self._node = rclpy.create_node(self._node_name)
+        # automatically_declare_parameters_from_overrides honors CLI/launch
+        # `use_sim_time` so /initialpose and any time-stamped publication
+        # align with the bag clock during replay.
+        self._node = rclpy.create_node(
+            self._node_name,
+            automatically_declare_parameters_from_overrides=True,
+        )
         for spec in self._specs:
             self._subscribe(spec)
         self._executor_thread = threading.Thread(target=self._spin_loop, daemon=True)
