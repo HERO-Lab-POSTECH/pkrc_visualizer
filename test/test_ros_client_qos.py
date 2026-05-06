@@ -44,7 +44,8 @@ def test_publish_initialpose_emits_pose_with_yaw():
         assert node is not None
         node.create_subscription(
             PoseWithCovarianceStamped, "/initialpose",
-            lambda msg: received.append(msg), 10)
+            lambda msg: received.append(msg),  # type: ignore[arg-type]
+            10)
         time.sleep(0.1)
         client.publish_initialpose(1.5, -2.0, math.pi / 2)
         deadline = time.time() + 2.0
