@@ -28,3 +28,35 @@ def test_transient_local_subscription_uses_transient_local_durability():
         assert endpoints[0].qos_profile.durability == DurabilityPolicy.TRANSIENT_LOCAL
     finally:
         client.stop()
+
+
+import math
+import time
+from geometry_msgs.msg import PoseWithCovarianceStamped
+
+
+def test_publish_initialpose_emits_pose_with_yaw():
+    client = RosClient([], node_name="initpose_test_node")
+    client.start()
+    received: list[PoseWithCovarianceStamped] = []
+    try:
+        node = client._node
+        assert node is not None
+        node.create_subscription(
+            PoseWithCovarianceStamped, "/initialpose",
+            lambda msg: received.append(msg), 10)
+        time.sleep(0.1)
+        client.publish_initialpose(1.5, -2.0, math.pi / 2)
+        deadline = time.time() + 2.0
+        while time.time() < deadline and not received:
+            time.sleep(0.05)
+        assert received, "initialpose not received"
+        msg = received[0]
+        assert msg.header.frame_id == "map"
+        assert abs(msg.pose.pose.position.x - 1.5) < 1e-6
+        assert abs(msg.pose.pose.position.y + 2.0) < 1e-6
+        # yaw = pi/2 → quaternion (0, 0, sin(pi/4), cos(pi/4))
+        assert abs(msg.pose.pose.orientation.z - math.sin(math.pi / 4)) < 1e-6
+        assert abs(msg.pose.pose.orientation.w - math.cos(math.pi / 4)) < 1e-6
+    finally:
+        client.stop()

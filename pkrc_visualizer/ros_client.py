@@ -34,6 +34,7 @@ class RosClient(QObject):
         # topic_name → (subscription_handle, ref_count)
         self._tid_to_topic: dict[str, str] = {}
         self._tid_seq = 0
+        self._initialpose_pub: Optional[Any] = None
 
     def start(self) -> None:
         if not rclpy.ok():
@@ -164,6 +165,36 @@ class RosClient(QObject):
                 with self._cache_lock:
                     self._cache[tid] = msg
                 self.message_received.emit(tid, msg)
+
+    def publish_initialpose(self, x: float, y: float, yaw: float) -> None:
+        """Publish a 2D pose estimate to /initialpose (RViz-compatible).
+
+        frame_id = "map", z = 0, covariance uses RViz defaults
+        (xx=0.25, yy=0.25, yaw=0.06853891945200942).
+        """
+        import math
+        from geometry_msgs.msg import PoseWithCovarianceStamped
+        if self._node is None:
+            return
+        if self._initialpose_pub is None:
+            self._initialpose_pub = self._node.create_publisher(
+                PoseWithCovarianceStamped, "/initialpose", 10)
+        msg = PoseWithCovarianceStamped()
+        msg.header.frame_id = "map"
+        msg.header.stamp = self._node.get_clock().now().to_msg()
+        msg.pose.pose.position.x = float(x)
+        msg.pose.pose.position.y = float(y)
+        msg.pose.pose.position.z = 0.0
+        msg.pose.pose.orientation.x = 0.0
+        msg.pose.pose.orientation.y = 0.0
+        msg.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        msg.pose.pose.orientation.w = math.cos(yaw / 2.0)
+        cov = [0.0] * 36
+        cov[0] = 0.25                  # xx
+        cov[7] = 0.25                  # yy
+        cov[35] = 0.06853891945200942  # yaw-yaw (RViz default)
+        msg.pose.covariance = cov
+        self._initialpose_pub.publish(msg)
 
     def stop(self) -> None:
         self._stop_event.set()
