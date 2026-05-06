@@ -37,11 +37,18 @@ def occupancy_to_rgba(msg: OccupancyGrid, alpha: float) -> np.ndarray:
 
 
 class PriorMapActor:
-    """Wraps a vtkImageActor whose texture is updated from OccupancyGrid messages."""
+    """Renders OccupancyGrid as a textured plane (vtkPlaneSource).
+
+    Earlier versions used vtkImageActor, but its near/far frustum clipping
+    chopped the plane when the camera tilted. A textured plane is a normal
+    polydata actor and survives any view angle.
+    """
 
     def __init__(self, plotter):
         self._plotter = plotter
-        self._actor: vtk.vtkImageActor | None = None
+        self._actor: vtk.vtkActor | None = None
+        self._plane: vtk.vtkPlaneSource | None = None
+        self._texture: vtk.vtkTexture | None = None
         self._alpha: float = 0.7
         self._last_msg: OccupancyGrid | None = None
         self._frame_warned: bool = False
@@ -55,29 +62,52 @@ class PriorMapActor:
         rgba = occupancy_to_rgba(msg, self._alpha)
         h, w, _ = rgba.shape
 
+        # Convert RGBA buffer to a vtkImageData (used as the plane texture).
         image = vtk.vtkImageData()
         image.SetDimensions(w, h, 1)
-        image.SetOrigin(msg.info.origin.position.x,
-                        msg.info.origin.position.y,
-                        PLANE_Z)
-        image.SetSpacing(msg.info.resolution, msg.info.resolution, 1.0)
         flat = rgba.reshape(-1, 4)
         vtk_arr = numpy_to_vtk(flat, deep=True, array_type=vtk.VTK_UNSIGNED_CHAR)
         vtk_arr.SetNumberOfComponents(4)
         image.GetPointData().SetScalars(vtk_arr)
 
+        ox = msg.info.origin.position.x
+        oy = msg.info.origin.position.y
+        size_x = msg.info.resolution * w
+        size_y = msg.info.resolution * h
+
         if self._actor is None:
-            self._actor = vtk.vtkImageActor()
-            self._actor.GetProperty().SetInterpolationTypeToNearest()
-            self._actor.SetInputData(image)
-            self._plotter.add_actor(self._actor)
+            plane = vtk.vtkPlaneSource()
+            plane.SetOrigin(ox, oy, PLANE_Z)
+            plane.SetPoint1(ox + size_x, oy, PLANE_Z)
+            plane.SetPoint2(ox, oy + size_y, PLANE_Z)
+
+            texture = vtk.vtkTexture()
+            texture.InterpolateOff()  # nearest-neighbor — preserve cell grid
+            texture.SetInputData(image)
+
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(plane.GetOutputPort())
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.SetTexture(texture)
+            self._plotter.add_actor(actor)
+            self._actor = actor
+            self._plane = plane
+            self._texture = texture
         else:
-            self._actor.SetInputData(image)
+            # Update extent (origin/resolution may change on reload) + texture.
+            assert self._plane is not None and self._texture is not None
+            self._plane.SetOrigin(ox, oy, PLANE_Z)
+            self._plane.SetPoint1(ox + size_x, oy, PLANE_Z)
+            self._plane.SetPoint2(ox, oy + size_y, PLANE_Z)
+            self._texture.SetInputData(image)
 
     def clear(self) -> None:
         if self._actor is not None:
             self._plotter.remove_actor(self._actor)
             self._actor = None
+            self._plane = None
+            self._texture = None
 
     def set_alpha(self, alpha: float) -> None:
         self._alpha = alpha
