@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased] — PR-P (post-7th audit)
+
+### Added
+- `pkrc_visualizer/qos.py` — module exposing `SENSOR_QOS` / `RELIABLE_QOS` / `LATCHED_QOS` aligned with sister packages (spec §2.4). `LATCHED_QOS` defined for future TF/map subscribers; not yet referenced.
+
+### Changed
+- `ros_client.py` — replace inline `QoSProfile(depth=10)` constructions in `_subscribe` and `subscribe_dynamic` with shared `SENSOR_QOS` / `RELIABLE_QOS` constants. Behavior preserved: prior default (depth=10, RELIABLE, VOLATILE) maps 1:1 to `RELIABLE_QOS`.
+
+### Verification
+- colcon build PASS
+- Smoke import PASS (`from pkrc_visualizer.qos import SENSOR_QOS, RELIABLE_QOS, LATCHED_QOS`)
+
+---
+
 ## [Unreleased] — Post-Audit Fix PR-E (fix)
 
 ### Fixed
