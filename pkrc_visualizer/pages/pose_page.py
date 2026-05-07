@@ -1,5 +1,5 @@
 """Pose / Path page: XY trajectory (built from pose_odom over a 30s window)
-+ confidence label. The trajectory replaces the old /fast_lio/debug/path
++ confidence label. The trajectory replaces the old /slam/fast_lio/debug/path
 subscription — odometry already streams every pose, and PosePlot now
 expires older entries by time so memory stays bounded."""
 from time import monotonic

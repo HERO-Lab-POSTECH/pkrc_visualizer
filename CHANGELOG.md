@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.8.0] — 2026-05-07 (minor)
+
+### Added
+- SLAM 페이지가 `cartographer_slam`이 publish하는 `/slam/cartographer/map` (nav_msgs/OccupancyGrid, LATCHED) 도 prior map source로 자동 구독한다. fast_lio_loc과 cartographer 어느 엔진을 띄워도 SLAM 탭의 Prior Map 표시가 동일하게 작동.
+- `topic_config.py`에 `slam_prior_grid_carto` TopicSpec 추가.
+- `slam_page.py:refresh()`가 `slam_prior_grid` (fast_lio_loc) 와 `slam_prior_grid_carto` (cartographer) 두 슬롯을 매 tick 모두 drain하여 stale 메시지가 남지 않도록 처리. 두 메시지가 같은 tick에 도착하면 cartographer가 우선 (운영 시 동시 사용 안 함, 결정론적 tie-break).
+
+### Changed
+- 모든 구독 토픽이 워크스페이스 SLAM 도메인 컨벤션 `/slam/...`로 갱신:
+  - `/localization/fast_lio/odometry` → `/slam/fast_lio/odometry`
+  - `/localization/fast_lio/points_body` → `/slam/fast_lio/points_body`
+  - `/localization/fast_lio_loc/odometry` → `/slam/fast_lio_loc/odometry`
+  - `/localization/fast_lio_loc/confidence` → `/slam/fast_lio_loc/confidence`
+  - `/localization/fast_lio_loc/occupancy_grid` → `/slam/fast_lio_loc/occupancy_grid`
+- `README.md`: SLAM 페이지의 prior map 섹션이 두 SLAM 엔진 동시 지원을 명시.
+
+### Notes
+- Coordinated breaking change with `fast_lio` v1.1.0, `cartographer_slam` v2.1.0, `sonar_3d_reconstruction` v1.1.0. 이전 버전 SLAM 패키지와 함께 띄우면 모든 구독이 publisher 0인 상태로 silent fail (에러 없이 빈 화면).
+- TF tree (REP-105) 영향 없음. RosClient는 여전히 `map`/`odom`/`base_link` frame 이름으로 lookup 한다 — 토픽 이름 변경과 frame 이름은 독립.
+- prior map QoS는 `transient_local`이라 SlamPage가 늦게 구독해도 마지막 한 장을 즉시 받는다 (두 토픽 모두).
+
+### Verification
+- grep `/localization/` `/cartographer_2d/` in `pkrc_visualizer/`, `README.md` → 0 hits (CHANGELOG 제외).
+- colcon build PASS (pkrc_visualizer).
+- Manual smoke (cartographer 모드): `ros2 launch cartographer_slam slam.launch.py use_localization:=true map_path:=...` + `ros2 run pkrc_visualizer pkrc_visualizer` → SLAM 탭에 cartographer map 평면이 자동 렌더링.
+- Manual smoke (fast_lio_loc 모드): 기존 동작 회귀 없음 — `/slam/fast_lio_loc/occupancy_grid` 단독으로도 표시.
+
 ## [0.7.0] — 2026-05-06
 
 ### Added

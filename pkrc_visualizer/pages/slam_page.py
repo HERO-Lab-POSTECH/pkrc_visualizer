@@ -1,4 +1,4 @@
-"""SLAM page — accumulate /localization/fast_lio/points_body (lifted via TF
+"""SLAM page — accumulate /slam/fast_lio/points_body (lifted via TF
 to odom and then to map) + overlay map-origin/robot-frame axes + optional
 OccupancyGrid prior map + 2D Pose Estimate toggle (click+drag on ground plane).
 
@@ -45,7 +45,8 @@ class SlamPage(BasePage):
         self._apply_prior_map_settings(display_store.get("slam"))
 
     def _is_my_topic(self, topic_id: str) -> bool:
-        return topic_id in {"slam_cloud", "pose_odom", "slam_prior_grid"}
+        return topic_id in {"slam_cloud", "pose_odom",
+                            "slam_prior_grid", "slam_prior_grid_carto"}
 
     def refresh(self) -> None:
         tf_map_from_odom = self._active_tf()  # None when no TF, or TF is still identity
@@ -78,7 +79,13 @@ class SlamPage(BasePage):
                 position, quaternion = apply_to_pose(tf_map_from_odom, position, quaternion)
             self._view.update_robot_pose(position, quaternion)
 
-        grid_msg = self._latest.pop("slam_prior_grid", None)
+        # Two prior-grid sources (fast_lio_loc, cartographer) are subscribed in
+        # parallel. Operationally only one SLAM engine runs at a time; both
+        # slots are drained each tick so a stale grid never lingers. cartographer
+        # wins ties — arbitrary but deterministic.
+        fastlio_grid = self._latest.pop("slam_prior_grid", None)
+        carto_grid = self._latest.pop("slam_prior_grid_carto", None)
+        grid_msg = carto_grid if carto_grid is not None else fastlio_grid
         if grid_msg is not None:
             settings = self._store.get("slam")
             if settings.prior_map.show:

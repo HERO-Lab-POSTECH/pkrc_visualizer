@@ -22,18 +22,24 @@ class TopicSpec:
 TOPICS = {
     "slam": [
         # Subscribe to body-frame scan and lift to odom→map in the page using TF.
-        # Avoids dependence on /fast_lio/debug/points_world (which is the same scan
-        # pre-transformed to odom but lives in the debug namespace).
-        TopicSpec("slam_cloud", "/localization/fast_lio/points_body", PointCloud2, qos_best_effort=True),
-        TopicSpec("slam_prior_grid", "/localization/fast_lio_loc/occupancy_grid",
+        # Avoids dependence on /slam/fast_lio/debug/points_world (which is the same
+        # scan pre-transformed to odom but lives in the debug namespace).
+        TopicSpec("slam_cloud", "/slam/fast_lio/points_body", PointCloud2, qos_best_effort=True),
+        # Two prior-grid sources are subscribed in parallel: fast_lio_loc and
+        # cartographer. Operationally only one SLAM engine is active at a time
+        # (Q1 confirmed), so the SlamPage routes whichever message arrives most
+        # recently into the same PriorMapActor — last-arrival-wins.
+        TopicSpec("slam_prior_grid", "/slam/fast_lio_loc/occupancy_grid",
+                  OccupancyGrid, qos_transient_local=True),
+        TopicSpec("slam_prior_grid_carto", "/slam/cartographer/map",
                   OccupancyGrid, qos_transient_local=True),
     ],
     "pose": [
-        TopicSpec("pose_odom", "/localization/fast_lio/odometry", Odometry),
-        TopicSpec("pose_loc_odom", "/localization/fast_lio_loc/odometry", Odometry),
-        TopicSpec("pose_confidence", "/localization/fast_lio_loc/confidence", Float32),
+        TopicSpec("pose_odom", "/slam/fast_lio/odometry", Odometry),
+        TopicSpec("pose_loc_odom", "/slam/fast_lio_loc/odometry", Odometry),
+        TopicSpec("pose_confidence", "/slam/fast_lio_loc/confidence", Float32),
         # PosePlot accumulates trajectory from pose_odom directly (30s window),
-        # so /fast_lio/debug/path is no longer needed.
+        # so /slam/fast_lio/debug/path is no longer needed.
     ],
     "mapping": [
         TopicSpec("map_cloud", "/perception/sonar_3d/points", PointCloud2, qos_best_effort=True),

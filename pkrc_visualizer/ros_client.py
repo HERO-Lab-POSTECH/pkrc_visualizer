@@ -243,7 +243,7 @@ class RosClient(QObject):
     def lookup_odom_from_base(self, stamp) -> Optional[np.ndarray]:
         """Return `odom ← base_link` at message timestamp as 4×4 numpy matrix.
 
-        Used to lift base_link-frame point clouds (e.g. /localization/fast_lio/points_body)
+        Used to lift base_link-frame point clouds (e.g. /slam/fast_lio/points_body)
         into odom frame. Returns None if TF for that timestamp is unavailable —
         caller should drop the frame; the next sample retries.
         """
