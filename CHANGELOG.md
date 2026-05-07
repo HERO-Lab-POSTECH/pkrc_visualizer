@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.10.0] — 2026-07-29 (minor)
+
+### Removed
+- `CloudSettings.size` (단일 필드).
+- `display_settings._safe_size_for_unit` 및 상수 `SIZE_UNIT_THRESHOLD`,
+  `SAFE_SIZE_FOR_PIXELS`, `SAFE_SIZE_FOR_METERS`.
+- `widgets.settings_panel._guard_size_on_unit_change` 및 상수
+  `SIZE_UNIT_SAFE_THRESHOLD`, `SAFE_SIZE_PIXELS`, `SAFE_SIZE_METERS`.
+- 단위 토글 시 store/panel 양 쪽에서 size를 임의 안전값으로 덮어쓰던
+  중복 가드 — 더 이상 필요 없음.
+
+### Added
+- `CloudSettings.size_pixels` (default `1.0`), `CloudSettings.size_meters`
+  (default `0.01`) — 단위별 사이즈 독립 저장.
+- `CloudSettings.active_size` 프로퍼티 — `size_unit`에 따라 활성 단위
+  필드를 반환. 렌더 경로 전용 read-only.
+- `SettingsPanel.rebuild_cloud_tab(size_unit)` — `cloud.size_unit` 변경
+  시 cloud 탭의 슬라이더(path/range/label/step)를 단위별로 교체.
+
+### Changed
+- `cloud_schema(include_decay, size_unit)`, `panel_tabs(include_decay,
+  size_unit, include_prior_map=False)`로 시그니처 확장 — 활성 단위에
+  맞는 슬라이더 spec을 emit.
+- 슬라이더 range/step이 단위별로 분리: pixels `0.1–20.0` step `0.1`,
+  meters `0.001–0.5` step `0.001`. 슬라이더 라벨도 자동 (`Size (px)` /
+  `Size (m)`).
+- 단위 토글이 무손실: 각 단위가 자기 사이즈를 기억하므로 px=10에서
+  meter로 토글 후 다시 pixels로 돌아오면 10 그대로 유지.
+
+### Migration
+- 기존 yaml의 `cloud.size`는 `settings_from_dict` 안에서 활성 단위
+  쪽 새 필드로 in-place 마이그레이션. 다른 단위는 dataclass 기본값
+  (px=1.0, m=0.01)으로 채움. 신/구 키가 모두 있으면 새 키 우선.
+- save_yaml은 더 이상 legacy `size` 키를 기록하지 않음.
+
+### Verification
+- `colcon build --packages-select pkrc_visualizer` PASS
+- `pytest` PASS (기존 대비 순증 +3 테스트 + 1 회귀 테스트)
+- 수동 (SLAM 페이지): pixels 10 → meters 토글 시 4-meter splat 발생
+  하지 않고 0.01 m로 안전하게 시작; 다시 pixels 토글 시 10 복귀.
+- 수동 (Sonar Mapping 페이지): SLAM과 동일 동작 확인.
+
+### Notes
+- 외부 패키지(fast-lio, sensor_packages 등)에 무영향 — cloud 데이터
+  흐름·topic·QoS·frame_id 일절 변경 없음.
+- 다음 작업 후보: 색상 다이얼로그(`QColorDialog` / `_ColorButton`)의
+  배경 색상 변동 이슈 — 별도 PR로.
+
+---
+
 ## [0.9.0] — 2026-05-08 (minor)
 
 ### Added

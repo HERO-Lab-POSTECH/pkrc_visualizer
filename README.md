@@ -110,6 +110,13 @@ v0.4.0 이전 yaml은 `panels` 리스트만 살리고 layout 정보는 자연 �
 - Time-based cloud decay (RViz convention), zoom-aware point size
   (world units via `vtkPointGaussianMapper`).
 
+## Cloud Size Per Unit (v0.8.0)
+
+**Cloud point size**: pixels 모드와 meters 모드 사이즈가 각각 별도로
+저장됩니다. 단위를 토글하면 슬라이더가 그 단위의 마지막 값으로 즉시
+복귀합니다 (무손실). 기본값은 pixels=1.0 (모드 전환 시 즉시 가벼운
+점), meters=0.01 (1 cm splat).
+
 ## Architecture
 
 - 단일 프로세스 — Qt 메인 스레드(UI) + rclpy 별도 스레드(spin) + `pyqtSignal` queued connection.
