@@ -184,13 +184,6 @@ class SettingsPanel(QFrame):
                 w.addItem(choice)
             w.currentTextChanged.connect(
                 lambda v, p=spec.path: self._emit(p, v))
-            if spec.path == "cloud.size_unit":
-                # Defer rebuild to the next event-loop tick: the combobox is a
-                # child of the cloud tab that rebuild_cloud_tab will destroy, and
-                # destroying a widget mid-signal-emission is unsafe in Qt.
-                w.currentTextChanged.connect(
-                    lambda new_unit: QTimer.singleShot(
-                        0, lambda u=new_unit: self.rebuild_cloud_tab(u)))
             return w
         raise ValueError(f"unknown widget kind: {spec.widget}")
 
@@ -223,7 +216,10 @@ class SettingsPanel(QFrame):
             self._widgets[spec.path] = w
             form.addRow(QLabel(spec.label), w)
         scroll.setWidget(inner)
+        old_tab = self._tabs_widget.widget(cloud_idx)
         self._tabs_widget.removeTab(cloud_idx)
+        if old_tab is not None:
+            old_tab.deleteLater()
         self._tabs_widget.insertTab(cloud_idx, scroll, "Cloud")
         self._tabs_widget.setCurrentIndex(cloud_idx)
 

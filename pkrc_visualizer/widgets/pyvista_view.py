@@ -29,7 +29,7 @@ pv.global_theme.allow_empty_mesh = True
 # at the default).
 #
 # Used together with SetTriangleScale(1.0): the sprite spans [-1, 1]
-# and the shader draws inside that range. ScaleFactor (=cloud.size)
+# and the shader draws inside that range. ScaleFactor (=cloud.size_meters)
 # therefore acts as the actual world-unit splat radius.
 _SPLAT_SHADER_GAUSSIAN = (
     "//VTK::Color::Impl\n"
@@ -473,7 +473,7 @@ class PyVistaView(QWidget):
                 # Pixels-mode style flags above are no-ops on a gaussian
                 # mapper, so we route style through SetSplatShaderCode
                 # instead. The discard-at-dist2>1.0 cutoff makes the
-                # visible splat radius equal ScaleFactor (=cloud.size)
+                # visible splat radius equal ScaleFactor (=cloud.size_meters)
                 # regardless of the sprite quad size that VTK chose.
                 mapper.SetSplatShaderCode(
                     _SPLAT_SHADERS.get(c.style, _SPLAT_SHADER_GAUSSIAN))

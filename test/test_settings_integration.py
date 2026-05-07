@@ -73,3 +73,32 @@ def test_reset_propagates_to_view(qtbot, tmp_path):
     # to vtkPointGaussianMapper; verify ScaleFactor instead of GetPointSize.
     mapper = view._cloud_actor.GetMapper()
     assert mapper.GetScaleFactor() == 0.01
+
+
+def test_cloud_size_unit_combobox_toggle_reaches_store(qtbot, tmp_path):
+    """Regression: clicking pixels<->meters in the combobox must update the
+    store (and via store.changed, the view + persisted YAML). Previously a
+    bug where rebuild_cloud_tab killed the debounce timer before
+    field_changed fired meant the toggle never reached the store.
+    """
+    view = PyVistaView()
+    qtbot.addWidget(view)
+    store = DisplaySettingsStore(path=tmp_path / "s.yaml", debounce_ms=50)
+    panel = SettingsPanel(panel_tabs(True, size_unit="meters"), parent=view)
+    panel.field_changed.connect(
+        lambda path, value: store.update("slam", path, value))
+
+    # Sync widgets with the store snapshot (defaults to size_unit="meters")
+    # so the combobox starts on "meters" — matching the real install path.
+    panel.apply_values(store.get("slam"))
+    assert store.get("slam").cloud.size_unit == "meters"
+
+    # User toggles the combobox to pixels.
+    combo = panel._widgets["cloud.size_unit"]
+    combo.setCurrentText("pixels")
+
+    # Wait for panel debounce (200ms) + store debounce (50ms) + buffer.
+    qtbot.wait(260)
+    qtbot.wait(120)
+
+    assert store.get("slam").cloud.size_unit == "pixels"
