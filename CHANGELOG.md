@@ -37,7 +37,7 @@
 
 ### Verification
 - `colcon build --packages-select pkrc_visualizer` PASS
-- `pytest` PASS (기존 대비 순증 +3 테스트 + 1 회귀 테스트)
+- `pytest` PASS (net +5 tests: 신규 동작 4 + 회귀 1; 폐기된 clamp 테스트 7개 제거)
 - 수동 (SLAM 페이지): pixels 10 → meters 토글 시 4-meter splat 발생
   하지 않고 0.01 m로 안전하게 시작; 다시 pixels 토글 시 10 복귀.
 - 수동 (Sonar Mapping 페이지): SLAM과 동일 동작 확인.
