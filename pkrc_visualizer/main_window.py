@@ -74,19 +74,21 @@ class MainWindow(QMainWindow):
         self.statusBar().set_page_text(f"Page: {PAGE_TITLES[index]}")
         self._drawer.close_drawer(self.centralWidget().height())
 
-    # Window aspect lock: 16:9. Width drives — users expand horizontally
-    # for 3D / sonar views. The idempotent height check prevents the
-    # resize() call from infinite-recursing through resizeEvent.
+    # Window aspect lock: 16:9 in normal (resizable) state. Skipped while
+    # the WM has the window in Maximized / FullScreen — fighting the WM
+    # there would loop and trap the window in a weird intermediate state.
     ASPECT_W = 16
     ASPECT_H = 9
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
 
-        expected_h = self.width() * self.ASPECT_H // self.ASPECT_W
-        if self.height() != expected_h:
-            self.resize(self.width(), expected_h)
-            return
+        wm_managed = bool(self.windowState() & (Qt.WindowMaximized | Qt.WindowFullScreen))
+        if not wm_managed:
+            expected_h = self.width() * self.ASPECT_H // self.ASPECT_W
+            if self.height() != expected_h:
+                self.resize(self.width(), expected_h)
+                return
 
         if self._drawer.isVisible():
             h = self.centralWidget().height()
