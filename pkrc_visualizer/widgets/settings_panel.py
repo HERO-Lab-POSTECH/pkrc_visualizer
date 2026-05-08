@@ -14,8 +14,8 @@ from PyQt5.QtWidgets import (
 from pkrc_visualizer.widgets.settings_schema import FieldSpec
 
 
-PANEL_WIDTH = 420
-PANEL_MAX_HEIGHT = 640
+PANEL_WIDTH = 560
+PANEL_MAX_HEIGHT = 760
 ANIMATION_MS = 240
 DEBOUNCE_MS = 200
 

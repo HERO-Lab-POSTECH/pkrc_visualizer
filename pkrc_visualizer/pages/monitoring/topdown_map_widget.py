@@ -29,8 +29,8 @@ TRAIL_SECONDS = 30.0
 ROBOT_LEN_M = 0.4
 # Pixel-space sizes for the robot arrow and TF triad. Decoupled from world
 # zoom so the robot stays readable as the auto-fit map grows.
-ROBOT_LEN_PX = 18.0
-AXIS_LEN_PX = 14.0
+ROBOT_LEN_PX = 30.0
+AXIS_LEN_PX = 22.0
 
 
 def _quat_to_yaw(qx: float, qy: float, qz: float, qw: float) -> float:
@@ -70,6 +70,7 @@ class _MapCanvas(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(160, 160)
+        self.setFocusPolicy(Qt.StrongFocus)  # accept key events for R-reset
         self._x = None
         self._y = None
         self._yaw = 0.0
@@ -80,6 +81,11 @@ class _MapCanvas(QWidget):
         self._grid_origin_xy: tuple[float, float] = (0.0, 0.0)
         self._grid_resolution: float = 0.0
         self._grid_size: tuple[int, int] = (0, 0)
+        # User-controlled view rotation (radians, CCW positive).
+        # Drag with the right mouse button to rotate; press R to reset.
+        self._view_yaw: float = 0.0
+        self._drag_anchor: Optional[QPointF] = None
+        self._drag_start_yaw: float = 0.0
 
     def update_pose(self, x: float, y: float, yaw: float) -> None:
         self._x = x
@@ -109,6 +115,22 @@ class _MapCanvas(QWidget):
         contract: callers must provide map-frame coords."""
         self.update_pose(x, y, yaw)
 
+    def _rotate_about_center(self, pt: QPointF) -> QPointF:
+        """Rotate a screen-space point around the panel centre by _view_yaw.
+
+        +_view_yaw rotates the visible map counter-clockwise on screen
+        (matches the conventional "drag right to spin world clockwise"
+        intuition once we negate at the input layer)."""
+        if self._view_yaw == 0.0:
+            return pt
+        cx = self.width() / 2.0
+        cy = self.height() / 2.0
+        c = math.cos(self._view_yaw)
+        s = math.sin(self._view_yaw)
+        dx = pt.x() - cx
+        dy = pt.y() - cy
+        return QPointF(cx + c * dx - s * dy, cy + s * dx + c * dy)
+
     def _world_to_screen(self, wx: float, wy: float) -> QPointF:
         """Map (wx, wy) world coords → panel pixel coords.
 
@@ -118,6 +140,10 @@ class _MapCanvas(QWidget):
           Aspect preserved (letterbox).
         - Robot-centered fallback. Used until the first grid arrives. +x
           forward → screen up, +y left → screen left, fixed 5m radius.
+
+        After the base mapping, the user's view rotation is applied as a
+        rotation around the panel centre so every drawn element (grid,
+        trail, robot) stays aligned.
         """
         if self._grid_image is not None and self._grid_size[0] > 0 \
                 and self._grid_size[1] > 0 and self._grid_resolution > 0.0:
@@ -133,7 +159,7 @@ class _MapCanvas(QWidget):
             cy = (Ph - gh_m * scale) / 2.0
             sx = cx + (wx - ox) * scale
             sy = cy + gh_m * scale - (wy - oy) * scale
-            return QPointF(sx, sy)
+            return self._rotate_about_center(QPointF(sx, sy))
 
         cx_pix = self.width() / 2.0
         cy_pix = self.height() / 2.0
@@ -143,33 +169,60 @@ class _MapCanvas(QWidget):
         ry = wy - (self._y or 0.0)
         sx = cx_pix - ry * scale
         sy = cy_pix - rx * scale
-        return QPointF(sx, sy)
+        return self._rotate_about_center(QPointF(sx, sy))
 
     def _paint_grid(self, p: QPainter) -> None:
+        """Draw the grid image, rotated by the user's view angle.
+
+        We can't just feed two rotated corners to drawImage(QRectF, ...)
+        because that builds an axis-aligned rect — the image would shear.
+        Instead apply a QPainter transform: translate to panel centre,
+        rotate by the view yaw, translate back, then draw on the
+        unrotated rect. The painter is restored to its prior state.
+        """
         if self._grid_image is None:
             return
         W, H = self._grid_size
         res = self._grid_resolution
         if W == 0 or H == 0 or res <= 0.0:
             return
-        ox, oy = self._grid_origin_xy
-        tl = self._world_to_screen(ox, oy + H * res)
-        br = self._world_to_screen(ox + W * res, oy)
-        rect = QRectF(tl.x(), tl.y(), br.x() - tl.x(), br.y() - tl.y())
+        # Compute the unrotated rectangle: temporarily disable view_yaw
+        # so _world_to_screen gives the base mapping, then let the
+        # painter do the rotation around the panel centre.
+        prev_yaw = self._view_yaw
+        self._view_yaw = 0.0
+        try:
+            ox, oy = self._grid_origin_xy
+            tl = self._world_to_screen(ox, oy + H * res)
+            br = self._world_to_screen(ox + W * res, oy)
+            rect = QRectF(tl.x(), tl.y(), br.x() - tl.x(), br.y() - tl.y())
+        finally:
+            self._view_yaw = prev_yaw
+
+        if prev_yaw == 0.0:
+            p.drawImage(rect, self._grid_image)
+            return
+        cx = self.width() / 2.0
+        cy = self.height() / 2.0
+        p.save()
+        p.translate(cx, cy)
+        p.rotate(math.degrees(prev_yaw))
+        p.translate(-cx, -cy)
         p.drawImage(rect, self._grid_image)
+        p.restore()
 
     def _paint_axes(self, p: QPainter) -> None:
         """Draw a small RViz-style triad at the robot pose, sized in pixels.
 
         Pixel-space length keeps the indicator readable regardless of how
-        far the auto-fit map is zoomed out.
+        far the auto-fit map is zoomed out. View rotation is folded into
+        the heading so the triad turns with the user-rotated map.
         """
         if self._x is None:
             return
         origin = self._world_to_screen(self._x, self._y)
-        # In screen coords +y_world maps to -y_screen (north-up), so the
-        # rotation is around the world yaw with the y-axis flipped.
-        cos_y, sin_y = math.cos(self._yaw), math.sin(self._yaw)
+        eff_yaw = self._yaw + self._view_yaw
+        cos_y, sin_y = math.cos(eff_yaw), math.sin(eff_yaw)
         x_tip = QPointF(origin.x() + AXIS_LEN_PX * cos_y,
                         origin.y() - AXIS_LEN_PX * sin_y)
         y_tip = QPointF(origin.x() - AXIS_LEN_PX * sin_y,
@@ -240,18 +293,18 @@ class _MapCanvas(QWidget):
         # TF axes triad at robot pose (X red, Y green)
         self._paint_axes(p)
         # Robot arrow — sized in PIXELS so it stays readable regardless of
-        # zoom level. Heading is taken from world yaw; +y_world points up
-        # on screen (north-up), so the screen rotation flips y.
+        # zoom level. View rotation is folded into the heading so the
+        # arrow turns together with the user-rotated map.
         if self._x is not None:
             origin = self._world_to_screen(self._x, self._y)
-            cos_y, sin_y = math.cos(self._yaw), math.sin(self._yaw)
+            eff_yaw = self._yaw + self._view_yaw
+            cos_y, sin_y = math.cos(eff_yaw), math.sin(eff_yaw)
             tip = QPointF(origin.x() + ROBOT_LEN_PX * cos_y,
                           origin.y() - ROBOT_LEN_PX * sin_y)
             back = ROBOT_LEN_PX * 0.4
             base_c = QPointF(origin.x() - back * cos_y,
                              origin.y() + back * sin_y)
             half = ROBOT_LEN_PX * 0.4
-            # Perpendicular direction in screen space.
             base_l = QPointF(base_c.x() - half * sin_y,
                              base_c.y() - half * cos_y)
             base_r = QPointF(base_c.x() + half * sin_y,
@@ -272,6 +325,46 @@ class _MapCanvas(QWidget):
             p.setPen(QColor(TEXT_DIM))
             p.drawText(r.adjusted(0, 24, 0, 24), Qt.AlignCenter,
                        "맵 대기 중\n(cartographer / fast_lio_loc)")
+
+    # ---- view rotation interaction --------------------------------
+    # Right-mouse drag spins the map around the panel centre. R resets.
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.RightButton:
+            self.setFocus(Qt.MouseFocusReason)
+            self._drag_anchor = QPointF(event.pos())
+            self._drag_start_yaw = self._view_yaw
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._drag_anchor is not None:
+            cx = self.width() / 2.0
+            cy = self.height() / 2.0
+            a0 = math.atan2(self._drag_anchor.y() - cy,
+                            self._drag_anchor.x() - cx)
+            a1 = math.atan2(event.pos().y() - cy,
+                            event.pos().x() - cx)
+            self._view_yaw = self._drag_start_yaw + (a1 - a0)
+            self.update()
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.RightButton and self._drag_anchor is not None:
+            self._drag_anchor = None
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key_R:
+            self._view_yaw = 0.0
+            self.update()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class TopdownMapWidget(QFrame):
