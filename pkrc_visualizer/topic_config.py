@@ -35,7 +35,11 @@ TOPICS = {
                   OccupancyGrid, qos_transient_local=True),
     ],
     "pose": [
+        # SlamPage + PosePage share these. Two odometry sources subscribed in
+        # parallel (last-arrival wins) so the robot pose renders whether SLAM
+        # is fast_lio or cartographer.
         TopicSpec("pose_odom", "/slam/fast_lio/odometry", Odometry),
+        TopicSpec("pose_odom_carto", "/slam/cartographer/odometry", Odometry),
         TopicSpec("pose_loc_odom", "/slam/fast_lio_loc/odometry", Odometry),
         TopicSpec("pose_confidence", "/slam/fast_lio_loc/confidence", Float32),
         # PosePlot accumulates trajectory from pose_odom directly (30s window),
@@ -52,6 +56,10 @@ TOPICS = {
                   PointCloud2, qos_best_effort=True),
         TopicSpec("map_cloud_outcore", "/perception/sonar_3d_visualizer/points",
                   PointCloud2, qos_best_effort=True),
+        # Robot pose: same parallel pattern as pose section so the arrow
+        # renders under either SLAM stack.
+        TopicSpec("map_pose_odom",       "/slam/fast_lio/odometry",   Odometry),
+        TopicSpec("map_pose_odom_carto", "/slam/cartographer/odometry", Odometry),
     ],
     "monitoring": [
         TopicSpec("mon_camera",    "/camera/image/compressed",  CompressedImage,    qos_best_effort=True),

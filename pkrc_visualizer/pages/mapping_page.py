@@ -1,4 +1,4 @@
-"""Sonar Mapping page: combined view of /perception/sonar_3d/points + /perception/sonar_3d_visualizer/markers."""
+"""Sonar Mapping page: points-only view; subscribes to mapper (in-memory) and map_visualizer (out-of-core) clouds in parallel."""
 import numpy as np
 from PyQt5.QtWidgets import QVBoxLayout
 from sensor_msgs_py import point_cloud2
@@ -19,10 +19,16 @@ class MappingPage(BasePage):
             self._view, page_key="mapping", store=display_store, include_decay=False)
 
     def _is_my_topic(self, topic_id: str) -> bool:
-        return topic_id in {"map_cloud", "map_markers", "pose_odom"}
+        return topic_id in {"map_cloud_inmem", "map_cloud_outcore",
+                            "map_pose_odom", "map_pose_odom_carto"}
 
     def refresh(self) -> None:
-        cloud_msg = self._latest.pop("map_cloud", None)
+        # Last-arrival-wins: only one mapper mode is active at a time, so
+        # whichever id holds a message this tick is the live source. Pop both
+        # ids so the next tick starts clean.
+        outcore_msg = self._latest.pop("map_cloud_outcore", None)
+        inmem_msg = self._latest.pop("map_cloud_inmem", None)
+        cloud_msg = outcore_msg if outcore_msg is not None else inmem_msg
         if cloud_msg is not None:
             pts = self._cloud_to_array(cloud_msg)
             self._view.update_cloud(pts, color="#81c784")
@@ -30,12 +36,10 @@ class MappingPage(BasePage):
                 self._view.reset_camera()
                 self._has_set_camera = True
 
-        marker_msg = self._latest.pop("map_markers", None)
-        if marker_msg is not None:
-            pts = self._markers_to_array(marker_msg)
-            self._view.update_markers(pts, color="#ffb74d")
-
-        odom_msg = self._latest.get("pose_odom")
+        # Two odometry sources (fast_lio, cartographer) — same last-arrival
+        # pattern as the cloud sources above.
+        odom_msg = (self._latest.get("map_pose_odom_carto")
+                    or self._latest.get("map_pose_odom"))
         if odom_msg is not None:
             p = odom_msg.pose.pose.position
             q = odom_msg.pose.pose.orientation

@@ -29,18 +29,21 @@ class PosePage(BasePage):
         layout.addWidget(self._plot, stretch=1)
 
     def _is_my_topic(self, topic_id: str) -> bool:
-        return topic_id in {"pose_odom", "pose_loc_odom", "pose_confidence"}
+        return topic_id in {"pose_odom", "pose_odom_carto",
+                            "pose_loc_odom", "pose_confidence"}
 
     def _on_message(self, topic_id: str, msg) -> None:
         super()._on_message(topic_id, msg)
-        if topic_id == "pose_odom":
+        if topic_id in ("pose_odom", "pose_odom_carto"):
             p = msg.pose.pose.position
             # monotonic() matches the cloud accumulator's clock so the path
             # window and cloud decay age together.
             self._plot.append_pose(monotonic(), p.x, p.y)
 
     def refresh(self) -> None:
-        odom = self._latest.get("pose_odom")
+        # Two odometry sources subscribed in parallel — last-arrival wins.
+        odom = (self._latest.get("pose_odom_carto")
+                or self._latest.get("pose_odom"))
         if odom is not None:
             p = odom.pose.pose.position
             self._odom_label.setText(f"Odometry: ({p.x:+.2f}, {p.y:+.2f}, {p.z:+.2f})")

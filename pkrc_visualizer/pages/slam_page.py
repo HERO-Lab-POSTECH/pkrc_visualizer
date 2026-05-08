@@ -45,7 +45,7 @@ class SlamPage(BasePage):
         self._apply_prior_map_settings(display_store.get("slam"))
 
     def _is_my_topic(self, topic_id: str) -> bool:
-        return topic_id in {"slam_cloud", "pose_odom",
+        return topic_id in {"slam_cloud", "pose_odom", "pose_odom_carto",
                             "slam_prior_grid", "slam_prior_grid_carto"}
 
     def refresh(self) -> None:
@@ -68,7 +68,11 @@ class SlamPage(BasePage):
                         self._has_set_camera = True
                 # else: TF not yet available — drop this scan, next one retries
 
-        odom_msg = self._latest.get("pose_odom")
+        # Two odometry sources (fast_lio, cartographer) subscribed in parallel.
+        # Operationally only one SLAM engine runs at a time; whichever id holds
+        # a message this tick is the live source — last-arrival wins.
+        odom_msg = (self._latest.get("pose_odom_carto")
+                    or self._latest.get("pose_odom"))
         if odom_msg is not None:
             p = odom_msg.pose.pose.position
             q = odom_msg.pose.pose.orientation

@@ -1,5 +1,5 @@
 """Top toolbar (hamburger) + DrawerMenu + QStackedWidget container."""
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtCore import QEvent, QSize, Qt
 from PyQt5.QtWidgets import (QAction, QMainWindow, QStackedWidget, QToolBar,
                              QVBoxLayout, QWidget)
 
@@ -74,17 +74,26 @@ class MainWindow(QMainWindow):
         self.statusBar().set_page_text(f"Page: {PAGE_TITLES[index]}")
         self._drawer.close_drawer(self.centralWidget().height())
 
-    # Window aspect lock: 16:9 in normal (resizable) state. Skipped while
-    # the WM has the window in Maximized / FullScreen — fighting the WM
-    # there would loop and trap the window in a weird intermediate state.
+    # Window aspect lock: 16:9 in normal (resizable) state. Suspended for
+    # one resize cycle right after a WindowStateChange so the WM can size
+    # the window into Maximized/FullScreen without us snapping it back.
     ASPECT_W = 16
     ASPECT_H = 9
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            # WM is about to resize us — let the next resizeEvent through.
+            self._suspend_aspect_lock = True
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
 
         wm_managed = bool(self.windowState() & (Qt.WindowMaximized | Qt.WindowFullScreen))
-        if not wm_managed:
+        suspended = getattr(self, "_suspend_aspect_lock", False)
+        if suspended:
+            self._suspend_aspect_lock = False
+        if not wm_managed and not suspended:
             expected_h = self.width() * self.ASPECT_H // self.ASPECT_W
             if self.height() != expected_h:
                 self.resize(self.width(), expected_h)
