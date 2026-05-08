@@ -75,12 +75,14 @@ TOPICS = {
         TopicSpec("mon_led",       "/pkrc/led/color",           String,             qos_best_effort=True),
         TopicSpec("mon_tilt_cur",  "/sonar/tilt/current_angle", Float32,            qos_best_effort=True),
         TopicSpec("mon_tilt_goal", "/sonar/tilt/goal_angle",    Float32,            qos_best_effort=True),
-        # 2D map sources — both engines subscribed in parallel; whichever
+        # 2D map sources — three engines subscribed in parallel; whichever
         # SLAM stack is running publishes. transient_local so a Monitoring
         # page opened *after* SLAM started still receives the latest map.
         TopicSpec("mon_map_carto",   "/slam/cartographer/map",
                   OccupancyGrid, qos_transient_local=True),
         TopicSpec("mon_map_fastlio", "/slam/fast_lio_loc/occupancy_grid",
+                  OccupancyGrid, qos_transient_local=True),
+        TopicSpec("mon_map_fastlio_mapping", "/slam/fast_lio/occupancy_grid",
                   OccupancyGrid, qos_transient_local=True),
         # Sonar polar image — auto-detect by message arrival.
         TopicSpec("mon_sonar_m750d",  "/sensor/sonar/oculus/m750d/image/compressed",

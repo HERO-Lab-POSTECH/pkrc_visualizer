@@ -85,6 +85,7 @@ class MonitoringPage(BasePage):
             "mon_tilt_goal":    self._tilt.update_goal,
             "mon_map_carto":    self._map.set_occupancy_grid,
             "mon_map_fastlio":  self._map.set_occupancy_grid,
+            "mon_map_fastlio_mapping": self._map.set_occupancy_grid,
             "mon_sonar_m750d":  self._sonar.set_image_msg,
             "mon_sonar_m3000d": self._sonar.set_image_msg,
         }

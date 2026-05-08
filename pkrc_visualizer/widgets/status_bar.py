@@ -40,6 +40,12 @@ class TopicHzStatusBar(QStatusBar):
             label = self._labels.get(topic_id)
             if label is None:
                 label = QLabel()
+                # Cap label width so the status bar can't grow past the
+                # window's normal minimum. Without this, every newly-seen
+                # topic permanently widens the bar (the WM then refuses to
+                # maximize the window because its minimum has outgrown the
+                # screen).
+                label.setMaximumWidth(140)
                 self._labels[topic_id] = label
                 self.addPermanentWidget(label)
             color = "#81c784" if hz > 0 else "#888"
