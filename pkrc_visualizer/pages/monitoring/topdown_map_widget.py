@@ -17,6 +17,7 @@ from PyQt5.QtGui import QColor, QFont, QImage, QPainter, QPen, QPolygonF
 from PyQt5.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
 from pkrc_visualizer.pages.monitoring.common import (ACCENT_BLUE, ACCENT_CYAN,
+                                                       ACCENT_GREEN, ACCENT_RED,
                                                        PANEL_BG_INNER,
                                                        PANEL_BORDER, PANEL_QSS,
                                                        TEXT_DIM, TEXT_LABEL,
@@ -102,16 +103,37 @@ class _MapCanvas(QWidget):
         self.update_pose(x, y, yaw)
 
     def _world_to_screen(self, wx: float, wy: float) -> QPointF:
-        # Center of widget = robot center (follow camera).
-        # Scale so VIEW_HALF_M fills half of the smaller dimension.
+        """Map (wx, wy) world coords → panel pixel coords.
+
+        Two modes:
+        - Auto-fit on grid bounds (north-up). Used when an occupancy grid
+          has been loaded. +x_world → screen right, +y_world → screen up.
+          Aspect preserved (letterbox).
+        - Robot-centered fallback. Used until the first grid arrives. +x
+          forward → screen up, +y left → screen left, fixed 5m radius.
+        """
+        if self._grid_image is not None and self._grid_size[0] > 0 \
+                and self._grid_size[1] > 0 and self._grid_resolution > 0.0:
+            Pw = float(self.width())
+            Ph = float(self.height())
+            W, H = self._grid_size
+            res = self._grid_resolution
+            ox, oy = self._grid_origin_xy
+            gw_m = W * res
+            gh_m = H * res
+            scale = min(Pw / gw_m, Ph / gh_m)
+            cx = (Pw - gw_m * scale) / 2.0
+            cy = (Ph - gh_m * scale) / 2.0
+            sx = cx + (wx - ox) * scale
+            sy = cy + gh_m * scale - (wy - oy) * scale
+            return QPointF(sx, sy)
+
         cx_pix = self.width() / 2.0
         cy_pix = self.height() / 2.0
         side = min(self.width(), self.height())
         scale = (side / 2.0) / VIEW_HALF_M
-        # Shift world point into robot-centered frame.
         rx = wx - (self._x or 0.0)
         ry = wy - (self._y or 0.0)
-        # +x world → screen up; +y world → screen left.
         sx = cx_pix - ry * scale
         sy = cy_pix - rx * scale
         return QPointF(sx, sy)
@@ -129,6 +151,27 @@ class _MapCanvas(QWidget):
         rect = QRectF(tl.x(), tl.y(), br.x() - tl.x(), br.y() - tl.y())
         p.drawImage(rect, self._grid_image)
 
+    def _paint_axes(self, p: QPainter) -> None:
+        """Draw a small RViz-style coordinate triad at the robot pose.
+
+        X axis red, Y axis green. Length = 0.5 m world (constant in metric
+        units, so visual size scales with zoom). No labels — keep it terse.
+        """
+        if self._x is None:
+            return
+        AXIS_LEN_M = 0.5
+        origin = self._world_to_screen(self._x, self._y)
+        x_tip = self._world_to_screen(
+            self._x + AXIS_LEN_M * math.cos(self._yaw),
+            self._y + AXIS_LEN_M * math.sin(self._yaw))
+        y_tip = self._world_to_screen(
+            self._x + AXIS_LEN_M * math.cos(self._yaw + math.pi / 2),
+            self._y + AXIS_LEN_M * math.sin(self._yaw + math.pi / 2))
+        p.setPen(QPen(QColor(ACCENT_RED), 2))
+        p.drawLine(origin, x_tip)
+        p.setPen(QPen(QColor(ACCENT_GREEN), 2))
+        p.drawLine(origin, y_tip)
+
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
@@ -138,12 +181,30 @@ class _MapCanvas(QWidget):
         p.drawRoundedRect(self.rect(), 6, 6)
         # Occupancy grid (behind everything else)
         self._paint_grid(p)
-        # Grid
+        # 1m grid lines
         p.setPen(QPen(QColor(PANEL_BORDER), 1))
-        side = min(self.width(), self.height())
-        scale = (side / 2.0) / VIEW_HALF_M
-        if self._x is not None:
-            # Snap grid lines to world meters.
+        if self._grid_image is not None and self._grid_size[0] > 0:
+            ox, oy = self._grid_origin_xy
+            W, H = self._grid_size
+            gw_m = W * self._grid_resolution
+            gh_m = H * self._grid_resolution
+            x_min = math.floor(ox / GRID_STEP_M) * GRID_STEP_M
+            x_max = ox + gw_m
+            x = x_min
+            while x <= x_max:
+                a = self._world_to_screen(x, oy)
+                b = self._world_to_screen(x, oy + gh_m)
+                p.drawLine(a, b)
+                x += GRID_STEP_M
+            y_min = math.floor(oy / GRID_STEP_M) * GRID_STEP_M
+            y_max = oy + gh_m
+            y = y_min
+            while y <= y_max:
+                a = self._world_to_screen(ox, y)
+                b = self._world_to_screen(ox + gw_m, y)
+                p.drawLine(a, b)
+                y += GRID_STEP_M
+        elif self._x is not None:
             x_min = math.floor((self._x - VIEW_HALF_M) / GRID_STEP_M) * GRID_STEP_M
             x_max = self._x + VIEW_HALF_M
             x = x_min
@@ -169,31 +230,27 @@ class _MapCanvas(QWidget):
                 if prev is not None:
                     p.drawLine(prev, pt)
                 prev = pt
-        # Robot arrow
+        # TF axes triad at robot pose (X red, Y green)
+        self._paint_axes(p)
+        # Robot arrow — direction = heading (yaw), length ROBOT_LEN_M in world.
+        # All vertices go through _world_to_screen so this is correct in
+        # both auto-fit and robot-centered-fallback modes.
         if self._x is not None:
-            cx, cy = self.width() / 2.0, self.height() / 2.0
-            arrow_pix = ROBOT_LEN_M * scale
-            tip_dx = math.cos(self._yaw) * arrow_pix
-            tip_dy = math.sin(self._yaw) * arrow_pix
-            # World +x → up, world +y → left → so tip on screen:
-            # (screen +y is down, screen +x is right)
-            tip_sx = cx - tip_dy
-            tip_sy = cy - tip_dx
-            base_left_dx = -tip_dy * 0.5 + tip_dx * 0.0
-            # Build a triangle: tip + two base points perpendicular to heading.
-            # Perpendicular in world = (-sin(yaw), cos(yaw)).
-            perp_dx = -math.sin(self._yaw) * arrow_pix * 0.4
-            perp_dy = math.cos(self._yaw) * arrow_pix * 0.4
-            base_x = -tip_dx * 0.4  # half a length behind center
-            base_y = -tip_dy * 0.4
-            base_l_sx = cx - (base_y + perp_dy)
-            base_l_sy = cy - (base_x + perp_dx)
-            base_r_sx = cx - (base_y - perp_dy)
-            base_r_sy = cy - (base_x - perp_dx)
+            tip_w = (self._x + ROBOT_LEN_M * math.cos(self._yaw),
+                     self._y + ROBOT_LEN_M * math.sin(self._yaw))
+            back = ROBOT_LEN_M * 0.4
+            base_c_w = (self._x - back * math.cos(self._yaw),
+                        self._y - back * math.sin(self._yaw))
+            perp_yaw = self._yaw + math.pi / 2
+            half_w = ROBOT_LEN_M * 0.4
+            base_l_w = (base_c_w[0] + half_w * math.cos(perp_yaw),
+                        base_c_w[1] + half_w * math.sin(perp_yaw))
+            base_r_w = (base_c_w[0] - half_w * math.cos(perp_yaw),
+                        base_c_w[1] - half_w * math.sin(perp_yaw))
             tri = QPolygonF([
-                QPointF(tip_sx, tip_sy),
-                QPointF(base_l_sx, base_l_sy),
-                QPointF(base_r_sx, base_r_sy),
+                self._world_to_screen(*tip_w),
+                self._world_to_screen(*base_l_w),
+                self._world_to_screen(*base_r_w),
             ])
             p.setPen(QPen(QColor("#ffffff"), 1))
             p.setBrush(QColor(ACCENT_BLUE))
@@ -207,7 +264,7 @@ class _MapCanvas(QWidget):
             small = QFont(); small.setPointSize(9); p.setFont(small)
             p.setPen(QColor(TEXT_DIM))
             p.drawText(r.adjusted(0, 24, 0, 24), Qt.AlignCenter,
-                       "/slam/fast_lio/odometry 대기 중")
+                       "맵 대기 중\n(cartographer / fast_lio_loc)")
 
 
 class TopdownMapWidget(QFrame):
