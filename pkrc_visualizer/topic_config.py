@@ -2,9 +2,9 @@
 from dataclasses import dataclass
 from typing import Type
 
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import BatteryState, CompressedImage, Joy, PointCloud2
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, Float32MultiArray, String, UInt8
 from visualization_msgs.msg import MarkerArray
 
 
@@ -42,8 +42,40 @@ TOPICS = {
         # so /slam/fast_lio/debug/path is no longer needed.
     ],
     "mapping": [
-        TopicSpec("map_cloud", "/perception/sonar_3d/points", PointCloud2, qos_best_effort=True),
-        TopicSpec("map_markers", "/perception/sonar_3d_visualizer/markers", MarkerArray, qos_best_effort=True),
+        # Two cloud sources subscribed in parallel: 3d_mapper publishes
+        # /perception/sonar_3d/points only in in-memory mode, map_visualizer
+        # publishes /perception/sonar_3d_visualizer/points only in out-of-core
+        # mode. Operationally only one mode runs at a time, so MappingPage
+        # routes whichever message arrives most recently into the same cloud
+        # actor — last-arrival-wins.
+        TopicSpec("map_cloud_inmem",   "/perception/sonar_3d/points",
+                  PointCloud2, qos_best_effort=True),
+        TopicSpec("map_cloud_outcore", "/perception/sonar_3d_visualizer/points",
+                  PointCloud2, qos_best_effort=True),
+    ],
+    "monitoring": [
+        TopicSpec("mon_camera",    "/camera/image/compressed",  CompressedImage,    qos_best_effort=True),
+        TopicSpec("mon_odom",      "/slam/fast_lio/odometry",   Odometry,           qos_best_effort=True),
+        TopicSpec("mon_joy",       "/joy",                      Joy,                qos_best_effort=True),
+        TopicSpec("mon_motors",    "/pkrc/motors/cmd_current",  Float32MultiArray,  qos_best_effort=True),
+        TopicSpec("mon_relays",    "/pkrc/relays/state",        UInt8,              qos_best_effort=True),
+        TopicSpec("mon_battery",   "/pkrc/battery/state",       BatteryState,       qos_best_effort=True),
+        TopicSpec("mon_system",    "/pkrc/system/state",        Float32MultiArray,  qos_best_effort=True),
+        TopicSpec("mon_led",       "/pkrc/led/color",           String,             qos_best_effort=True),
+        TopicSpec("mon_tilt_cur",  "/sonar/tilt/current_angle", Float32,            qos_best_effort=True),
+        TopicSpec("mon_tilt_goal", "/sonar/tilt/goal_angle",    Float32,            qos_best_effort=True),
+        # 2D map sources — both engines subscribed in parallel; whichever
+        # SLAM stack is running publishes. transient_local so a Monitoring
+        # page opened *after* SLAM started still receives the latest map.
+        TopicSpec("mon_map_carto",   "/slam/cartographer/map",
+                  OccupancyGrid, qos_transient_local=True),
+        TopicSpec("mon_map_fastlio", "/slam/fast_lio_loc/occupancy_grid",
+                  OccupancyGrid, qos_transient_local=True),
+        # Sonar polar image — auto-detect by message arrival.
+        TopicSpec("mon_sonar_m750d",  "/sensor/sonar/oculus/m750d/image/compressed",
+                  CompressedImage, qos_best_effort=True),
+        TopicSpec("mon_sonar_m3000d", "/sensor/sonar/oculus/m3000d/image/compressed",
+                  CompressedImage, qos_best_effort=True),
     ],
 }
 
