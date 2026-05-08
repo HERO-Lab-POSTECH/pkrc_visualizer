@@ -221,7 +221,7 @@ class _MapCanvas(QWidget):
         if self._x is None:
             return
         origin = self._world_to_screen(self._x, self._y)
-        eff_yaw = self._yaw + self._view_yaw
+        eff_yaw = self._yaw - self._view_yaw
         cos_y, sin_y = math.cos(eff_yaw), math.sin(eff_yaw)
         x_tip = QPointF(origin.x() + AXIS_LEN_PX * cos_y,
                         origin.y() - AXIS_LEN_PX * sin_y)
@@ -297,7 +297,7 @@ class _MapCanvas(QWidget):
         # arrow turns together with the user-rotated map.
         if self._x is not None:
             origin = self._world_to_screen(self._x, self._y)
-            eff_yaw = self._yaw + self._view_yaw
+            eff_yaw = self._yaw - self._view_yaw
             cos_y, sin_y = math.cos(eff_yaw), math.sin(eff_yaw)
             tip = QPointF(origin.x() + ROBOT_LEN_PX * cos_y,
                           origin.y() - ROBOT_LEN_PX * sin_y)
