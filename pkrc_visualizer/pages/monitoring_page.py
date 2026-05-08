@@ -15,8 +15,8 @@ from pkrc_visualizer.pages.monitoring.motor_currents_widget import \
     MotorCurrentsWidget
 from pkrc_visualizer.pages.monitoring.relay_lamps_widget import \
     RelayLampsWidget
-from pkrc_visualizer.pages.monitoring.sonar_placeholder_widget import \
-    SonarPlaceholderWidget
+from pkrc_visualizer.pages.monitoring.sonar_image_widget import \
+    SonarImageWidget
 from pkrc_visualizer.pages.monitoring.sonar_tilt_widget import SonarTiltWidget
 from pkrc_visualizer.pages.monitoring.system_led_widget import SystemLedWidget
 from pkrc_visualizer.pages.monitoring.topdown_map_widget import \
@@ -52,7 +52,7 @@ class MonitoringPage(BasePage):
 
         # Main visualization (80%)
         self._map = TopdownMapWidget()
-        self._sonar = SonarPlaceholderWidget()
+        self._sonar = SonarImageWidget()
         self._camera = CameraWidget()
 
         bottom = QWidget()
@@ -71,16 +71,18 @@ class MonitoringPage(BasePage):
         outer.addWidget(bottom, 4)
 
         self._dispatch = {
-            "mon_camera":    self._camera.update_from_msg,
-            "mon_odom":      self._map.update_from_msg,
-            "mon_joy":       self._joy.update_from_msg,
-            "mon_motors":    self._motors.update_from_msg,
-            "mon_relays":    self._relays.update_from_msg,
-            "mon_battery":   self._battery.update_from_msg,
-            "mon_system":    self._sys_led.update_system,
-            "mon_led":       self._sys_led.update_led,
-            "mon_tilt_cur":  self._tilt.update_current,
-            "mon_tilt_goal": self._tilt.update_goal,
+            "mon_camera":       self._camera.update_from_msg,
+            "mon_odom":         self._map.update_from_msg,
+            "mon_joy":          self._joy.update_from_msg,
+            "mon_motors":       self._motors.update_from_msg,
+            "mon_relays":       self._relays.update_from_msg,
+            "mon_battery":      self._battery.update_from_msg,
+            "mon_system":       self._sys_led.update_system,
+            "mon_led":          self._sys_led.update_led,
+            "mon_tilt_cur":     self._tilt.update_current,
+            "mon_tilt_goal":    self._tilt.update_goal,
+            "mon_sonar_m750d":  self._sonar.set_image_msg,
+            "mon_sonar_m3000d": self._sonar.set_image_msg,
         }
 
     def _is_my_topic(self, topic_id: str) -> bool:
