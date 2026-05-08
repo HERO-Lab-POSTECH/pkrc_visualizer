@@ -18,23 +18,28 @@ def _make_grid(width, height, cells, resolution=0.1, ox=0.0, oy=0.0):
     return msg
 
 
-def test_grid_to_qimage_unknown_is_grey():
+def _alpha(img, x, y):
+    return (img.pixel(x, y) >> 24) & 0xFF
+
+
+def test_grid_to_qimage_unknown_is_transparent():
     cells = [-1] * (3 * 3)
     img = _occupancy_grid_to_qimage(_make_grid(3, 3, cells))
     assert img.width() == 3 and img.height() == 3
-    assert img.pixel(0, 0) & 0xFF == 127
+    assert _alpha(img, 0, 0) == 0
 
 
-def test_grid_to_qimage_free_is_white():
+def test_grid_to_qimage_free_is_faint():
     cells = [0] * (3 * 3)
     img = _occupancy_grid_to_qimage(_make_grid(3, 3, cells))
-    assert img.pixel(0, 0) & 0xFF == 255
+    # Free cells render as a barely-visible wash, not full white.
+    assert 0 < _alpha(img, 0, 0) < 128
 
 
-def test_grid_to_qimage_occupied_is_black():
+def test_grid_to_qimage_occupied_is_opaque():
     cells = [100] * (3 * 3)
     img = _occupancy_grid_to_qimage(_make_grid(3, 3, cells))
-    assert img.pixel(0, 0) & 0xFF == 0
+    assert _alpha(img, 0, 0) == 255
 
 
 def test_grid_to_qimage_y_flipped():
@@ -43,9 +48,10 @@ def test_grid_to_qimage_y_flipped():
              50, 50, 50,
              0, 0, 0]           # row 2 = top in world
     img = _occupancy_grid_to_qimage(_make_grid(3, 3, cells))
-    # In QImage coords (y=0 is top), pixel(0,0) should be the FREE row.
-    assert img.pixel(0, 0) & 0xFF == 255
-    assert img.pixel(0, 2) & 0xFF == 0
+    # In QImage coords (y=0 is top), pixel(0,0) should be the FREE row
+    # (faint), pixel(0,2) the OCCUPIED row (opaque).
+    assert _alpha(img, 0, 0) < 128
+    assert _alpha(img, 0, 2) == 255
 
 
 def test_set_occupancy_grid_caches_metadata(qtbot):

@@ -27,6 +27,10 @@ VIEW_HALF_M = 5.0    # 5m radius visible
 GRID_STEP_M = 1.0
 TRAIL_SECONDS = 30.0
 ROBOT_LEN_M = 0.4
+# Pixel-space sizes for the robot arrow and TF triad. Decoupled from world
+# zoom so the robot stays readable as the auto-fit map grows.
+ROBOT_LEN_PX = 18.0
+AXIS_LEN_PX = 14.0
 
 
 def _quat_to_yaw(qx: float, qy: float, qz: float, qw: float) -> float:
@@ -37,26 +41,29 @@ def _quat_to_yaw(qx: float, qy: float, qz: float, qw: float) -> float:
 
 
 def _occupancy_grid_to_qimage(msg) -> QImage:
-    """nav_msgs/OccupancyGrid → QImage (Format_Grayscale8).
+    """nav_msgs/OccupancyGrid → ARGB QImage with deliberately light tone.
 
-    Greyscale mapping:
-      -1 (unknown) → 127 (mid grey)
-       0 (free)    → 255 (white)
-     100 (occupied) → 0 (black)
-      others       → linearly interpolated.
-
-    OccupancyGrid data is row-major with row 0 at the LOWER-LEFT cell
-    (origin pose). QImage uses TOP-LEFT origin, so we flip vertically
-    so that drawImage(rect, img) renders north-up.
+    The previous greyscale mapping (unknown = mid grey, free = white,
+    occupied = black) was too heavy — the grid dominated the panel and
+    the actual walls (occupied cells, sparse) blended in. New mapping:
+      -1 (unknown) → near-transparent (subtle background tint)
+       0 (free)    → very light (almost background)
+     100 (occupied) → opaque dark blue (high contrast against panel)
     """
     w = msg.info.width
     h = msg.info.height
     data = np.asarray(msg.data, dtype=np.int16).reshape(h, w)
-    out = np.where(data < 0, 127, 255 - (data * 255) // 100)
-    out = np.clip(out, 0, 255).astype(np.uint8)
-    out = np.flipud(out)
-    flat = bytes(out.tobytes())
-    return QImage(flat, w, h, w, QImage.Format_Grayscale8).copy()
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    occupied = data >= 50
+    free = (data >= 0) & (data < 50)
+    # Walls — saturated cyan/blue, fully opaque so they pop.
+    rgba[occupied] = (96, 165, 250, 255)
+    # Free cells — barely-visible grey wash so the grid frame still reads.
+    rgba[free] = (255, 255, 255, 60)
+    # Unknown cells stay (0,0,0,0) — fully transparent.
+    rgba = np.flipud(rgba)
+    flat = bytes(rgba.tobytes())
+    return QImage(flat, w, h, w * 4, QImage.Format_RGBA8888).copy()
 
 
 class _MapCanvas(QWidget):
@@ -152,21 +159,21 @@ class _MapCanvas(QWidget):
         p.drawImage(rect, self._grid_image)
 
     def _paint_axes(self, p: QPainter) -> None:
-        """Draw a small RViz-style coordinate triad at the robot pose.
+        """Draw a small RViz-style triad at the robot pose, sized in pixels.
 
-        X axis red, Y axis green. Length = 0.5 m world (constant in metric
-        units, so visual size scales with zoom). No labels — keep it terse.
+        Pixel-space length keeps the indicator readable regardless of how
+        far the auto-fit map is zoomed out.
         """
         if self._x is None:
             return
-        AXIS_LEN_M = 0.5
         origin = self._world_to_screen(self._x, self._y)
-        x_tip = self._world_to_screen(
-            self._x + AXIS_LEN_M * math.cos(self._yaw),
-            self._y + AXIS_LEN_M * math.sin(self._yaw))
-        y_tip = self._world_to_screen(
-            self._x + AXIS_LEN_M * math.cos(self._yaw + math.pi / 2),
-            self._y + AXIS_LEN_M * math.sin(self._yaw + math.pi / 2))
+        # In screen coords +y_world maps to -y_screen (north-up), so the
+        # rotation is around the world yaw with the y-axis flipped.
+        cos_y, sin_y = math.cos(self._yaw), math.sin(self._yaw)
+        x_tip = QPointF(origin.x() + AXIS_LEN_PX * cos_y,
+                        origin.y() - AXIS_LEN_PX * sin_y)
+        y_tip = QPointF(origin.x() - AXIS_LEN_PX * sin_y,
+                        origin.y() - AXIS_LEN_PX * cos_y)
         p.setPen(QPen(QColor(ACCENT_RED), 2))
         p.drawLine(origin, x_tip)
         p.setPen(QPen(QColor(ACCENT_GREEN), 2))
@@ -232,26 +239,24 @@ class _MapCanvas(QWidget):
                 prev = pt
         # TF axes triad at robot pose (X red, Y green)
         self._paint_axes(p)
-        # Robot arrow — direction = heading (yaw), length ROBOT_LEN_M in world.
-        # All vertices go through _world_to_screen so this is correct in
-        # both auto-fit and robot-centered-fallback modes.
+        # Robot arrow — sized in PIXELS so it stays readable regardless of
+        # zoom level. Heading is taken from world yaw; +y_world points up
+        # on screen (north-up), so the screen rotation flips y.
         if self._x is not None:
-            tip_w = (self._x + ROBOT_LEN_M * math.cos(self._yaw),
-                     self._y + ROBOT_LEN_M * math.sin(self._yaw))
-            back = ROBOT_LEN_M * 0.4
-            base_c_w = (self._x - back * math.cos(self._yaw),
-                        self._y - back * math.sin(self._yaw))
-            perp_yaw = self._yaw + math.pi / 2
-            half_w = ROBOT_LEN_M * 0.4
-            base_l_w = (base_c_w[0] + half_w * math.cos(perp_yaw),
-                        base_c_w[1] + half_w * math.sin(perp_yaw))
-            base_r_w = (base_c_w[0] - half_w * math.cos(perp_yaw),
-                        base_c_w[1] - half_w * math.sin(perp_yaw))
-            tri = QPolygonF([
-                self._world_to_screen(*tip_w),
-                self._world_to_screen(*base_l_w),
-                self._world_to_screen(*base_r_w),
-            ])
+            origin = self._world_to_screen(self._x, self._y)
+            cos_y, sin_y = math.cos(self._yaw), math.sin(self._yaw)
+            tip = QPointF(origin.x() + ROBOT_LEN_PX * cos_y,
+                          origin.y() - ROBOT_LEN_PX * sin_y)
+            back = ROBOT_LEN_PX * 0.4
+            base_c = QPointF(origin.x() - back * cos_y,
+                             origin.y() + back * sin_y)
+            half = ROBOT_LEN_PX * 0.4
+            # Perpendicular direction in screen space.
+            base_l = QPointF(base_c.x() - half * sin_y,
+                             base_c.y() - half * cos_y)
+            base_r = QPointF(base_c.x() + half * sin_y,
+                             base_c.y() + half * cos_y)
+            tri = QPolygonF([tip, base_l, base_r])
             p.setPen(QPen(QColor("#ffffff"), 1))
             p.setBrush(QColor(ACCENT_BLUE))
             p.drawPolygon(tri)
