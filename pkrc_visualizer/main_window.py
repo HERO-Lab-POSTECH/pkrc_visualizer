@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
     def __init__(self, ros_client, display_store):
         super().__init__()
         self.setWindowTitle("PKRC Visualizer")
-        self.resize(1280, 800)
+        self.resize(1280, 720)
 
         self._ros_client = ros_client
         self._display_store = display_store
@@ -74,8 +74,20 @@ class MainWindow(QMainWindow):
         self.statusBar().set_page_text(f"Page: {PAGE_TITLES[index]}")
         self._drawer.close_drawer(self.centralWidget().height())
 
+    # Window aspect lock: 16:9. Width drives — users expand horizontally
+    # for 3D / sonar views. The idempotent height check prevents the
+    # resize() call from infinite-recursing through resizeEvent.
+    ASPECT_W = 16
+    ASPECT_H = 9
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+
+        expected_h = self.width() * self.ASPECT_H // self.ASPECT_W
+        if self.height() != expected_h:
+            self.resize(self.width(), expected_h)
+            return
+
         if self._drawer.isVisible():
             h = self.centralWidget().height()
             self._drawer.setGeometry(0, 0, self._drawer.DRAWER_WIDTH, h)

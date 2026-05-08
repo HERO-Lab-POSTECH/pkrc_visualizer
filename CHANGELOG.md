@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.9.0] — 2026-05-08 (minor)
+
+### Added
+- Monitoring 페이지의 "🗺 2D 맵" 패널이 occupancy grid를 직접 렌더링한다. Cartographer (`/slam/cartographer/map`)와 FastLIO localization (`/slam/fast_lio_loc/occupancy_grid`)을 병렬 구독, 운영 중인 엔진의 맵이 표시됨.
+- 2D 맵 위에 RViz 스타일 TF 축 (X 빨강 / Y 초록, 0.5m world) + heading 화살표 + 30초 trail 오버레이.
+- 뷰는 occupancy grid bounds에 auto-fit (north-up, +x → screen right). letterbox로 종횡비 보존.
+- "소나 이미지" 패널이 polar 소나 영상을 표시. m750d / m3000d 두 토픽 자동 감지: 도착하는 메시지가 있는 쪽이 화면을 차지.
+- Monitoring 페이지가 `/slam/cartographer/odometry`도 구독 (fast_lio와 병렬, last-arrival wins). cartographer-only 운영 시에도 로봇 화살표 표시.
+- 메인 윈도우 16:9 종횡비 잠금: 1280×720으로 시작, resize 시 width 기준으로 height 자동 보정.
+
+### Changed
+- `pages/monitoring/topdown_map_widget.py`의 `_MapCanvas`가 occupancy grid layer + auto-fit + TF axes로 확장. 그리드가 없을 때는 robot-centered 5m 뷰로 자동 fallback.
+- Monitoring 페이지 `_handle_odom`이 `lookup_map_from_odom()`으로 odom→map 변환 후 위젯에 전달. TF 미준비 시 odom 좌표로 fallback (회귀 없음).
+- 빈상태 "2D Map" 큰글씨 텍스트는 grid도 없을 때만 표시 (그리드 위에 글자 오버레이 안 함).
+
+### Removed
+- `pages/monitoring/sonar_placeholder_widget.py` ("TBD" placeholder, 더 이상 import 안 됨).
+- `TopdownMapWidget.update_from_msg` (vestigial; `_handle_odom` + `set_pose_in_map_frame`이 대체).
+
+### Notes
+- fast_lio mapping mode의 2D occupancy grid 지원은 다음 PR에서 fast_lio v1.2.0에 OccupancyGridGenerator 통합으로 처리 예정.
+
 ## [0.8.0] — 2026-05-07 (minor)
 
 ### Added
