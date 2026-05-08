@@ -55,7 +55,10 @@ TOPICS = {
     ],
     "monitoring": [
         TopicSpec("mon_camera",    "/camera/image/compressed",  CompressedImage,    qos_best_effort=True),
-        TopicSpec("mon_odom",      "/slam/fast_lio/odometry",   Odometry,           qos_best_effort=True),
+        # Two odometry sources subscribed in parallel (last-arrival wins) so
+        # the robot pose renders whether SLAM is fast_lio or cartographer.
+        TopicSpec("mon_odom",        "/slam/fast_lio/odometry",   Odometry,         qos_best_effort=True),
+        TopicSpec("mon_odom_carto",  "/slam/cartographer/odometry", Odometry,       qos_best_effort=True),
         TopicSpec("mon_joy",       "/joy",                      Joy,                qos_best_effort=True),
         TopicSpec("mon_motors",    "/pkrc/motors/cmd_current",  Float32MultiArray,  qos_best_effort=True),
         TopicSpec("mon_relays",    "/pkrc/relays/state",        UInt8,              qos_best_effort=True),

@@ -74,6 +74,7 @@ class MonitoringPage(BasePage):
         self._dispatch = {
             "mon_camera":       self._camera.update_from_msg,
             "mon_odom":         self._handle_odom,
+            "mon_odom_carto":   self._handle_odom,
             "mon_joy":          self._joy.update_from_msg,
             "mon_motors":       self._motors.update_from_msg,
             "mon_relays":       self._relays.update_from_msg,

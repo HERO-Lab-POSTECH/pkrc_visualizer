@@ -255,8 +255,10 @@ class _MapCanvas(QWidget):
             p.setPen(QPen(QColor("#ffffff"), 1))
             p.setBrush(QColor(ACCENT_BLUE))
             p.drawPolygon(tri)
-        else:
-            # No data yet — match web GUI's "2D Map" empty state
+        elif self._grid_image is None:
+            # Truly empty (no grid AND no pose). Show the big "2D Map" hint.
+            # Once a grid arrives, suppress the overlay text — the map alone
+            # is the empty state for "no robot pose yet".
             p.setPen(QColor(TEXT_LABEL))
             big = QFont(); big.setPointSize(20); big.setBold(True); p.setFont(big)
             r = self.rect()
