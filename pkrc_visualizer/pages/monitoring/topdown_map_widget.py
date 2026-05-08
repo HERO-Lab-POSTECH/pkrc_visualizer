@@ -9,9 +9,11 @@ Coordinate convention (matches RViz top-down view):
 import math
 import time
 from collections import deque
+from typing import Optional
 
-from PyQt5.QtCore import QPointF, Qt
-from PyQt5.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
+import numpy as np
+from PyQt5.QtCore import QPointF, QRectF, Qt
+from PyQt5.QtGui import QColor, QFont, QImage, QPainter, QPen, QPolygonF
 from PyQt5.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
 from pkrc_visualizer.pages.monitoring.common import (ACCENT_BLUE, ACCENT_CYAN,
@@ -33,6 +35,29 @@ def _quat_to_yaw(qx: float, qy: float, qz: float, qw: float) -> float:
     return math.atan2(siny_cosp, cosy_cosp)
 
 
+def _occupancy_grid_to_qimage(msg) -> QImage:
+    """nav_msgs/OccupancyGrid → QImage (Format_Grayscale8).
+
+    Greyscale mapping:
+      -1 (unknown) → 127 (mid grey)
+       0 (free)    → 255 (white)
+     100 (occupied) → 0 (black)
+      others       → linearly interpolated.
+
+    OccupancyGrid data is row-major with row 0 at the LOWER-LEFT cell
+    (origin pose). QImage uses TOP-LEFT origin, so we flip vertically
+    so that drawImage(rect, img) renders north-up.
+    """
+    w = msg.info.width
+    h = msg.info.height
+    data = np.asarray(msg.data, dtype=np.int16).reshape(h, w)
+    out = np.where(data < 0, 127, 255 - (data * 255) // 100)
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    out = np.flipud(out)
+    flat = bytes(out.tobytes())
+    return QImage(flat, w, h, w, QImage.Format_Grayscale8).copy()
+
+
 class _MapCanvas(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -42,6 +67,11 @@ class _MapCanvas(QWidget):
         self._yaw = 0.0
         # Trail entries: (timestamp, x, y) in world coords
         self._trail: deque[tuple[float, float, float]] = deque(maxlen=600)
+        # Occupancy-grid layer (drawn behind grid lines / trail / robot).
+        self._grid_image: Optional[QImage] = None
+        self._grid_origin_xy: tuple[float, float] = (0.0, 0.0)
+        self._grid_resolution: float = 0.0
+        self._grid_size: tuple[int, int] = (0, 0)
 
     def update_pose(self, x: float, y: float, yaw: float) -> None:
         self._x = x
@@ -54,6 +84,22 @@ class _MapCanvas(QWidget):
         while self._trail and self._trail[0][0] < cutoff:
             self._trail.popleft()
         self.update()
+
+    def set_occupancy_grid(self, msg) -> None:
+        """Cache grid as QImage + metadata; trigger repaint."""
+        self._grid_image = _occupancy_grid_to_qimage(msg)
+        self._grid_origin_xy = (
+            float(msg.info.origin.position.x),
+            float(msg.info.origin.position.y),
+        )
+        self._grid_resolution = float(msg.info.resolution)
+        self._grid_size = (int(msg.info.width), int(msg.info.height))
+        self.update()
+
+    def set_pose_in_map_frame(self, x: float, y: float, yaw: float) -> None:
+        """Equivalent to update_pose; explicit name documents the frame
+        contract: callers must provide map-frame coords."""
+        self.update_pose(x, y, yaw)
 
     def _world_to_screen(self, wx: float, wy: float) -> QPointF:
         # Center of widget = robot center (follow camera).
@@ -70,6 +116,19 @@ class _MapCanvas(QWidget):
         sy = cy_pix - rx * scale
         return QPointF(sx, sy)
 
+    def _paint_grid(self, p: QPainter) -> None:
+        if self._grid_image is None:
+            return
+        W, H = self._grid_size
+        res = self._grid_resolution
+        if W == 0 or H == 0 or res <= 0.0:
+            return
+        ox, oy = self._grid_origin_xy
+        tl = self._world_to_screen(ox, oy + H * res)
+        br = self._world_to_screen(ox + W * res, oy)
+        rect = QRectF(tl.x(), tl.y(), br.x() - tl.x(), br.y() - tl.y())
+        p.drawImage(rect, self._grid_image)
+
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
@@ -77,6 +136,8 @@ class _MapCanvas(QWidget):
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(PANEL_BG_INNER))
         p.drawRoundedRect(self.rect(), 6, 6)
+        # Occupancy grid (behind everything else)
+        self._paint_grid(p)
         # Grid
         p.setPen(QPen(QColor(PANEL_BORDER), 1))
         side = min(self.width(), self.height())
@@ -163,9 +224,9 @@ class TopdownMapWidget(QFrame):
         self._canvas = _MapCanvas()
         layout.addWidget(self._canvas, 1)
 
-    def update_from_msg(self, msg) -> None:
-        # nav_msgs/Odometry — pose.pose.position + pose.pose.orientation
-        pos = msg.pose.pose.position
-        ori = msg.pose.pose.orientation
-        yaw = _quat_to_yaw(ori.x, ori.y, ori.z, ori.w)
-        self._canvas.update_pose(float(pos.x), float(pos.y), yaw)
+    def set_occupancy_grid(self, msg) -> None:
+        """nav_msgs/OccupancyGrid pass-through to canvas."""
+        self._canvas.set_occupancy_grid(msg)
+
+    def set_pose_in_map_frame(self, x: float, y: float, yaw: float) -> None:
+        self._canvas.set_pose_in_map_frame(x, y, yaw)

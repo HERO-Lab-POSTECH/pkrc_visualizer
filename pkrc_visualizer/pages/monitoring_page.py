@@ -19,8 +19,9 @@ from pkrc_visualizer.pages.monitoring.sonar_image_widget import \
     SonarImageWidget
 from pkrc_visualizer.pages.monitoring.sonar_tilt_widget import SonarTiltWidget
 from pkrc_visualizer.pages.monitoring.system_led_widget import SystemLedWidget
-from pkrc_visualizer.pages.monitoring.topdown_map_widget import \
-    TopdownMapWidget
+from pkrc_visualizer.pages.monitoring.topdown_map_widget import (
+    TopdownMapWidget, _quat_to_yaw)
+from pkrc_visualizer.tf_transform import apply_to_pose
 
 TOPIC_PREFIX = "mon_"
 
@@ -72,7 +73,7 @@ class MonitoringPage(BasePage):
 
         self._dispatch = {
             "mon_camera":       self._camera.update_from_msg,
-            "mon_odom":         self._map.update_from_msg,
+            "mon_odom":         self._handle_odom,
             "mon_joy":          self._joy.update_from_msg,
             "mon_motors":       self._motors.update_from_msg,
             "mon_relays":       self._relays.update_from_msg,
@@ -81,9 +82,33 @@ class MonitoringPage(BasePage):
             "mon_led":          self._sys_led.update_led,
             "mon_tilt_cur":     self._tilt.update_current,
             "mon_tilt_goal":    self._tilt.update_goal,
+            "mon_map_carto":    self._map.set_occupancy_grid,
+            "mon_map_fastlio":  self._map.set_occupancy_grid,
             "mon_sonar_m750d":  self._sonar.set_image_msg,
             "mon_sonar_m3000d": self._sonar.set_image_msg,
         }
+
+    def _handle_odom(self, msg) -> None:
+        """Lift odometry from odom frame to map frame before drawing.
+
+        Uses the existing ros_client.lookup_map_from_odom() (zero-timeout,
+        non-blocking). If TF is unavailable, fall back to odom coords —
+        the robot still renders, just slightly misaligned to the grid
+        until TF becomes available.
+        """
+        pos = msg.pose.pose.position
+        ori = msg.pose.pose.orientation
+        tf_map_from_odom = self._ros_client.lookup_map_from_odom()
+        if tf_map_from_odom is not None:
+            position = (pos.x, pos.y, pos.z)
+            quat = (ori.x, ori.y, ori.z, ori.w)
+            position, quat = apply_to_pose(tf_map_from_odom, position, quat)
+            x, y = position[0], position[1]
+            yaw = _quat_to_yaw(quat[0], quat[1], quat[2], quat[3])
+        else:
+            x, y = pos.x, pos.y
+            yaw = _quat_to_yaw(ori.x, ori.y, ori.z, ori.w)
+        self._map.set_pose_in_map_frame(x, y, yaw)
 
     def _is_my_topic(self, topic_id: str) -> bool:
         return topic_id.startswith(TOPIC_PREFIX)
