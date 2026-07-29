@@ -37,6 +37,21 @@ class CloudSettings:
     flat_color: str = "#4fc3f7"
     color_min: float = 0.0
     color_max: float = 10.0
+    # XYZ-range focus: highlight an axis-aligned box with a stronger alpha
+    # while the rest of the cloud stays at `alpha`. Each axis has its own
+    # enable toggle; in-focus = AND across enabled axes (disabled axes do
+    # not constrain). All disabled = focus off. Only the Post Processing
+    # page exposes the UI (include_xyz_focus flag).
+    x_focus_enabled: bool = False
+    x_focus_min: float = -10.0
+    x_focus_max: float = 10.0
+    y_focus_enabled: bool = False
+    y_focus_min: float = -10.0
+    y_focus_max: float = 10.0
+    z_focus_enabled: bool = False
+    z_focus_min: float = -2.0
+    z_focus_max: float = 0.0
+    alpha_focus: float = 0.8
 
 
 @dataclass

@@ -33,7 +33,7 @@ def frames_schema() -> list[FieldSpec]:
     ]
 
 
-def cloud_schema(include_decay: bool) -> list[FieldSpec]:
+def cloud_schema(include_decay: bool, include_xyz_focus: bool = False) -> list[FieldSpec]:
     fields_: list[FieldSpec] = [
         FieldSpec("cloud.style", "Style", "combobox",
                   {"choices": ["points", "square", "spheres"]}),
@@ -41,7 +41,7 @@ def cloud_schema(include_decay: bool) -> list[FieldSpec]:
                   {"min": 0.01, "max": 20.0, "step": 0.1}),
         FieldSpec("cloud.size_unit", "Size unit", "combobox",
                   {"choices": ["pixels", "meters"]}),
-        FieldSpec("cloud.alpha", "Alpha", "slider",
+        FieldSpec("cloud.alpha", "Alpha (outside focus)", "slider",
                   {"min": 0.0, "max": 1.0, "step": 0.05}),
     ]
     if include_decay:
@@ -57,6 +57,22 @@ def cloud_schema(include_decay: bool) -> list[FieldSpec]:
         FieldSpec("cloud.color_max", "Color max", "spinbox_float",
                   {"min": -1000.0, "max": 1000.0, "step": 0.1}),
     ])
+    if include_xyz_focus:
+        for axis in ("x", "y", "z"):
+            label = axis.upper()
+            fields_.extend([
+                FieldSpec(f"cloud.{axis}_focus_enabled",
+                          f"{label} focus on", "checkbox"),
+                FieldSpec(f"cloud.{axis}_focus_min",
+                          f"{label} focus min (m)", "spinbox_float",
+                          {"min": -1000.0, "max": 1000.0, "step": 0.1}),
+                FieldSpec(f"cloud.{axis}_focus_max",
+                          f"{label} focus max (m)", "spinbox_float",
+                          {"min": -1000.0, "max": 1000.0, "step": 0.1}),
+            ])
+        fields_.append(FieldSpec(
+            "cloud.alpha_focus", "Alpha (inside focus)", "slider",
+            {"min": 0.0, "max": 1.0, "step": 0.05}))
     return fields_
 
 
@@ -74,12 +90,13 @@ def background_schema() -> list[FieldSpec]:
     ]
 
 
-def panel_tabs(include_decay: bool, include_prior_map: bool = False
+def panel_tabs(include_decay: bool, include_prior_map: bool = False,
+               include_xyz_focus: bool = False
                ) -> list[tuple[str, str, list[FieldSpec]]]:
     """Return (tab_id, tab_label, fields) triples in display order."""
     tabs = [
         ("frames", "Frames", frames_schema()),
-        ("cloud", "Cloud", cloud_schema(include_decay)),
+        ("cloud", "Cloud", cloud_schema(include_decay, include_xyz_focus)),
     ]
     if include_prior_map:
         tabs.append(("prior_map", "Prior Map", prior_map_schema()))

@@ -7,12 +7,13 @@ from pkrc_visualizer.pages.image_page import ImagePage
 from pkrc_visualizer.pages.mapping_page import MappingPage
 from pkrc_visualizer.pages.monitoring_page import MonitoringPage
 from pkrc_visualizer.pages.pose_page import PosePage
+from pkrc_visualizer.pages.postprocess_page import PostprocessPage
 from pkrc_visualizer.pages.slam_page import SlamPage
 from pkrc_visualizer.widgets.drawer_menu import DrawerMenu
 from pkrc_visualizer.widgets.status_bar import TopicHzStatusBar
 
 
-PAGE_TITLES = ["Monitoring", "SLAM", "Pose / Path", "Sonar Mapping", "Sonar Image"]
+PAGE_TITLES = ["Monitoring", "SLAM", "Pose / Path", "Sonar Mapping", "Sonar Image", "Post Processing"]
 
 
 class MainWindow(QMainWindow):
@@ -31,6 +32,7 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(PosePage(ros_client))
         self._stack.addWidget(MappingPage(ros_client, display_store))
         self._stack.addWidget(ImagePage(ros_client, display_store))
+        self._stack.addWidget(PostprocessPage(ros_client, display_store))
 
         container = QWidget()
         layout = QVBoxLayout(container)

@@ -174,6 +174,13 @@ class PyVistaView(QWidget):
         self._cloud_actor = self._plotter.add_mesh(
             empty.copy(), color="#4fc3f7", point_size=2,
             render_points_as_spheres=False)
+        # Parallel actor used by the z-focus split: when z_focus_enabled,
+        # update_cloud routes in-range points here (rendered at alpha_focus)
+        # and out-of-range points stay in _cloud_actor (rendered at alpha).
+        # When the focus is off, this actor is always empty.
+        self._focus_cloud_actor = self._plotter.add_mesh(
+            empty.copy(), color="#4fc3f7", point_size=2,
+            render_points_as_spheres=False)
         self._marker_actor = self._plotter.add_mesh(
             empty.copy(), color="#ffb74d", point_size=4,
             render_points_as_spheres=True)
@@ -189,6 +196,21 @@ class PyVistaView(QWidget):
         self._jet_lut = self._make_jet_lut()
         # Set by apply_display_settings; 0.0 disables decay.
         self.decay_seconds = 30.0
+        # XYZ-focus split config: per-axis (enabled, min, max) tuples in
+        # x,y,z order. A point is "in focus" iff it lies inside [min, max]
+        # along every enabled axis (disabled axes do not constrain). All
+        # disabled = focus off, single-actor render. Mirrored from
+        # CloudSettings.{x,y,z}_focus_* in _apply_cloud.
+        self._xyz_focus_config: tuple[
+            tuple[bool, float, float],
+            tuple[bool, float, float],
+            tuple[bool, float, float],
+        ] = (
+            (False, -10.0, 10.0),
+            (False, -10.0, 10.0),
+            (False, -2.0, 0.0),
+        )
+        self._last_cloud_points: np.ndarray | None = None
 
         # Persistent vtkCubeAxesActor — bounds updated in place (no flicker).
         cube_axes = vtk.vtkCubeAxesActor()
@@ -274,9 +296,44 @@ class PyVistaView(QWidget):
         self._last_grid_update = now
 
     def update_cloud(self, points, color="#4fc3f7"):
-        self._set_actor_points(self._cloud_actor, points, self._polydata_keepalive)
-        self._cloud_actor.GetProperty().SetColor(*pv.Color(color).float_rgb)
+        # Cache for later re-splits triggered by apply_display_settings (so
+        # changing z_focus_min/max in the settings panel re-routes the existing
+        # cloud without the caller having to re-supply the points).
+        self._last_cloud_points = points
+        rgb = pv.Color(color).float_rgb
+        self._cloud_actor.GetProperty().SetColor(*rgb)
+        self._focus_cloud_actor.GetProperty().SetColor(*rgb)
+        self._render_cloud_split(points)
         self._maybe_update_grid(points)
+
+    def _render_cloud_split(self, points: np.ndarray) -> None:
+        """Route `points` into _cloud_actor (+ _focus_cloud_actor if focus on).
+
+        Focus is the AND of every enabled axis's [min, max] check. An axis
+        with min >= max is treated as if it were disabled (forgiving — the
+        per-axis checkbox is the primary on/off control). When no axis is
+        enabled, the focus actor receives an empty polydata so any leftover
+        splat from a previous "on" state is cleared.
+        """
+        axis_configs = self._xyz_focus_config
+        active = [(axis_idx, mn, mx)
+                  for axis_idx, (en, mn, mx) in enumerate(axis_configs)
+                  if en and mn < mx]
+        empty = np.zeros((0, 3), dtype=np.float32)
+        if not active or points.size == 0:
+            self._set_actor_points(
+                self._cloud_actor, points, self._polydata_keepalive)
+            self._set_actor_points(
+                self._focus_cloud_actor, empty, self._polydata_keepalive)
+            return
+        in_focus = np.ones(len(points), dtype=bool)
+        for axis_idx, mn, mx in active:
+            coord = points[:, axis_idx]
+            in_focus &= (coord >= mn) & (coord <= mx)
+        self._set_actor_points(
+            self._cloud_actor, points[~in_focus], self._polydata_keepalive)
+        self._set_actor_points(
+            self._focus_cloud_actor, points[in_focus], self._polydata_keepalive)
 
     def append_cloud(self, points, color="#4fc3f7"):
         if points.size == 0:
@@ -457,14 +514,29 @@ class PyVistaView(QWidget):
         self._expire_chunks(monotonic())
         self._enforce_hard_cap()
 
+        new_focus_config = (
+            (bool(c.x_focus_enabled), float(c.x_focus_min), float(c.x_focus_max)),
+            (bool(c.y_focus_enabled), float(c.y_focus_min), float(c.y_focus_max)),
+            (bool(c.z_focus_enabled), float(c.z_focus_min), float(c.z_focus_max)),
+        )
+        focus_config_changed = new_focus_config != self._xyz_focus_config
+        self._xyz_focus_config = new_focus_config
+
         # "square" disables point smoothing globally; "spheres" uses the
         # impostor sphere shader (only meaningful in pixel mode).
         self._plotter.render_window.SetPointSmoothing(c.style != "square")
-        for actor in (self._cloud_actor, self._accum_actor):
+        # _focus_cloud_actor mirrors _cloud_actor's style/color but uses
+        # alpha_focus instead of alpha. Per-actor opacity below picks them apart.
+        actor_alpha = {
+            id(self._cloud_actor): c.alpha,
+            id(self._focus_cloud_actor): c.alpha_focus,
+            id(self._accum_actor): c.alpha,
+        }
+        for actor in (self._cloud_actor, self._focus_cloud_actor, self._accum_actor):
             self._install_point_mapper(actor, c.size_unit, c.size)
             prop = actor.GetProperty()
             prop.SetPointSize(c.size)        # pixels mode only; gaussian uses SetScaleFactor
-            prop.SetOpacity(c.alpha)
+            prop.SetOpacity(actor_alpha[id(actor)])
             prop.SetRenderPointsAsSpheres(
                 c.style == "spheres" and c.size_unit == "pixels")
             mapper = actor.GetMapper()
@@ -490,6 +562,11 @@ class PyVistaView(QWidget):
         if self._accum_chunks:
             self._set_actor_points(
                 self._accum_actor, self._concat_chunks(), self._polydata_keepalive)
+        # If the user just changed the z range or toggled focus, re-split the
+        # cached cloud across the two actors without needing the caller to
+        # re-supply points.
+        if focus_config_changed and self._last_cloud_points is not None:
+            self._render_cloud_split(self._last_cloud_points)
 
     def closeEvent(self, event):
         self._plotter.close()

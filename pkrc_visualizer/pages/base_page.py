@@ -54,6 +54,7 @@ class BasePage(QWidget):
         store: DisplaySettingsStore,
         include_decay: bool,
         include_prior_map: bool = False,
+        include_xyz_focus: bool = False,
     ) -> None:
         """Hook a SettingsButton + SettingsPanel onto a 3D view.
 
@@ -61,7 +62,9 @@ class BasePage(QWidget):
         changes back into the store. Re-applies the snapshot to the view
         whenever the store emits.
         """
-        panel = SettingsPanel(panel_tabs(include_decay, include_prior_map), parent=view)
+        panel = SettingsPanel(
+            panel_tabs(include_decay, include_prior_map, include_xyz_focus),
+            parent=view)
         button = SettingsButton(view)
 
         def _on_button_clicked():
