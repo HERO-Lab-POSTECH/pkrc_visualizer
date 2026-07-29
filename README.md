@@ -26,8 +26,8 @@ ros2 run pkrc_visualizer pkrc_viz
 
 | 메뉴 | 토픽 |
 |---|---|
-| SLAM | `/fast_lio/debug/points_world`, `/fast_lio/debug/path`, `/localization/fast_lio_loc/occupancy_grid` (transient_local, 선택) |
-| 위치/경로 | `/localization/fast_lio/odometry`, `/localization/fast_lio_loc/{odometry, confidence}`, `/fast_lio/debug/path` |
+| SLAM | `/slam/fast_lio/debug/points_world`, `/slam/fast_lio/debug/path`, `/slam/fast_lio_loc/occupancy_grid` (transient_local, 선택) |
+| 위치/경로 | `/slam/fast_lio/odometry`, `/slam/fast_lio_loc/{odometry, confidence}`, `/slam/fast_lio/debug/path` |
 | Sonar Mapping | `/perception/sonar_3d/points`, `/perception/sonar_3d_visualizer/markers` |
 | Sonar Image | 사용자 입력 (런타임) — `+ Add Viewer` 후 ROS 활성 토픽 중 `sensor_msgs/Image` 또는 `CompressedImage` 선택 |
 
@@ -47,12 +47,16 @@ SLAM 및 Sonar Mapping 페이지의 3D 뷰포트 좌측 하단에 ⚙ 버튼이 
 설정은 변경 시 `~/.config/pkrc_visualizer/display_settings.yaml`에 자동 저장되고
 재시작 시 복원됩니다. "Reset this tab to defaults" 버튼은 현재 탭만 초기화.
 
-## SLAM Prior Map + Pose Estimate (v0.6.0)
+## SLAM Prior Map + Pose Estimate (v0.6.0, cartographer 추가 v0.8.0)
 
-`fast-lio` localization 모드에서 SLAM 페이지가 prior PCD를 z 슬라이스로 변환한
-2D OccupancyGrid (`/localization/fast_lio_loc/occupancy_grid`)를 자동 구독하여
-`map` frame의 z=0 평면에 텍스처로 렌더링한다. 누적 LiDAR 스캔이 그 평면 위에
-겹쳐 보인다.
+SLAM 페이지가 두 SLAM 엔진의 2D OccupancyGrid를 동시에 구독한다:
+
+- `/slam/fast_lio_loc/occupancy_grid` — `fast-lio` localization 모드에서 prior PCD를 z 슬라이스로 변환해 publish
+- `/slam/cartographer/map` — `cartographer_slam`이 mapping 모드와 localization 모드 모두에서 publish
+
+운영 시에는 두 SLAM 엔진을 동시에 띄우지 않으므로 페이지는 가장 최근에 도착한
+메시지를 `map` frame의 z=0 평면에 텍스처로 렌더링한다. 누적 LiDAR 스캔이 그 평면
+위에 겹쳐 보인다.
 
 설정 패널 SLAM 탭의 **Prior Map** 그룹에서 표시 on/off와 alpha를 조절할 수 있다.
 

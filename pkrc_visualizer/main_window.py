@@ -5,26 +5,28 @@ from PyQt5.QtWidgets import (QAction, QMainWindow, QStackedWidget, QToolBar,
 
 from pkrc_visualizer.pages.image_page import ImagePage
 from pkrc_visualizer.pages.mapping_page import MappingPage
+from pkrc_visualizer.pages.monitoring_page import MonitoringPage
 from pkrc_visualizer.pages.pose_page import PosePage
 from pkrc_visualizer.pages.slam_page import SlamPage
 from pkrc_visualizer.widgets.drawer_menu import DrawerMenu
 from pkrc_visualizer.widgets.status_bar import TopicHzStatusBar
 
 
-PAGE_TITLES = ["SLAM", "Pose / Path", "Sonar Mapping", "Sonar Image"]
+PAGE_TITLES = ["Monitoring", "SLAM", "Pose / Path", "Sonar Mapping", "Sonar Image"]
 
 
 class MainWindow(QMainWindow):
     def __init__(self, ros_client, display_store):
         super().__init__()
         self.setWindowTitle("PKRC Visualizer")
-        self.resize(1280, 800)
+        self.resize(1280, 720)
 
         self._ros_client = ros_client
         self._display_store = display_store
 
         # Stacked page container
         self._stack = QStackedWidget()
+        self._stack.addWidget(MonitoringPage(ros_client))
         self._stack.addWidget(SlamPage(ros_client, display_store))
         self._stack.addWidget(PosePage(ros_client))
         self._stack.addWidget(MappingPage(ros_client, display_store))
@@ -72,8 +74,21 @@ class MainWindow(QMainWindow):
         self.statusBar().set_page_text(f"Page: {PAGE_TITLES[index]}")
         self._drawer.close_drawer(self.centralWidget().height())
 
+    # Window aspect lock: 16:9 only when the window is in normal state
+    # (not maximized, not fullscreen). isMaximized()/isFullScreen() are
+    # race-free unlike windowState() flags during a transition.
+    ASPECT_W = 16
+    ASPECT_H = 9
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+
+        if not self.isMaximized() and not self.isFullScreen():
+            expected_h = self.width() * self.ASPECT_H // self.ASPECT_W
+            if self.height() != expected_h:
+                self.resize(self.width(), expected_h)
+                return
+
         if self._drawer.isVisible():
             h = self.centralWidget().height()
             self._drawer.setGeometry(0, 0, self._drawer.DRAWER_WIDTH, h)

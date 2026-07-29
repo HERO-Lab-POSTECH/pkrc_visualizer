@@ -1,6 +1,11 @@
-"""SLAM page — accumulate /fast_lio/debug/points_world (world frame) +
-overlay map-origin/robot-frame axes + optional OccupancyGrid prior map +
-2D Pose Estimate toggle (click+drag on ground plane)."""
+"""SLAM page — accumulate /slam/fast_lio/points_body (lifted via TF
+to odom and then to map) + overlay map-origin/robot-frame axes + optional
+OccupancyGrid prior map + 2D Pose Estimate toggle (click+drag on ground plane).
+
+Each scan is transformed body→odom using the TF at the scan's own timestamp
+(`odom ← base_link`), then odom→map using the latest `map ← odom` (when
+present). When either lookup fails the frame is dropped — the next sample
+retries once TF settles."""
 import numpy as np
 from PyQt5.QtWidgets import QAction, QToolBar, QVBoxLayout
 from sensor_msgs_py import point_cloud2
@@ -40,35 +45,51 @@ class SlamPage(BasePage):
         self._apply_prior_map_settings(display_store.get("slam"))
 
     def _is_my_topic(self, topic_id: str) -> bool:
-        return topic_id in {"slam_cloud", "slam_path", "pose_odom", "slam_prior_grid"}
+        return topic_id in {"slam_cloud", "pose_odom", "pose_odom_carto",
+                            "slam_prior_grid", "slam_prior_grid_carto"}
 
     def refresh(self) -> None:
-        tf_matrix = self._active_tf()  # None when no TF, or TF is still identity
+        tf_map_from_odom = self._active_tf()  # None when no TF, or TF is still identity
 
         cloud_msg = self._latest.pop("slam_cloud", None)
         if cloud_msg is not None:
             pts = self._cloud_to_array(cloud_msg)
             if pts.size:
-                if tf_matrix is not None:
+                tf_odom_from_base = self._ros_client.lookup_odom_from_base(
+                    cloud_msg.header.stamp)
+                if tf_odom_from_base is not None:
                     from pkrc_visualizer.tf_transform import apply_to_points
-                    pts = apply_to_points(tf_matrix, pts)
-                self._view.append_cloud(pts, color="#4fc3f7")
-                if not self._has_set_camera:
-                    self._view.reset_camera()
-                    self._has_set_camera = True
+                    pts = apply_to_points(tf_odom_from_base, pts)
+                    if tf_map_from_odom is not None:
+                        pts = apply_to_points(tf_map_from_odom, pts)
+                    self._view.append_cloud(pts, color="#4fc3f7")
+                    if not self._has_set_camera:
+                        self._view.reset_camera()
+                        self._has_set_camera = True
+                # else: TF not yet available — drop this scan, next one retries
 
-        odom_msg = self._latest.get("pose_odom")
+        # Two odometry sources (fast_lio, cartographer) subscribed in parallel.
+        # Operationally only one SLAM engine runs at a time; whichever id holds
+        # a message this tick is the live source — last-arrival wins.
+        odom_msg = (self._latest.get("pose_odom_carto")
+                    or self._latest.get("pose_odom"))
         if odom_msg is not None:
             p = odom_msg.pose.pose.position
             q = odom_msg.pose.pose.orientation
             position = (p.x, p.y, p.z)
             quaternion = (q.x, q.y, q.z, q.w)
-            if tf_matrix is not None:
+            if tf_map_from_odom is not None:
                 from pkrc_visualizer.tf_transform import apply_to_pose
-                position, quaternion = apply_to_pose(tf_matrix, position, quaternion)
+                position, quaternion = apply_to_pose(tf_map_from_odom, position, quaternion)
             self._view.update_robot_pose(position, quaternion)
 
-        grid_msg = self._latest.pop("slam_prior_grid", None)
+        # Two prior-grid sources (fast_lio_loc, cartographer) are subscribed in
+        # parallel. Operationally only one SLAM engine runs at a time; both
+        # slots are drained each tick so a stale grid never lingers. cartographer
+        # wins ties — arbitrary but deterministic.
+        fastlio_grid = self._latest.pop("slam_prior_grid", None)
+        carto_grid = self._latest.pop("slam_prior_grid_carto", None)
+        grid_msg = carto_grid if carto_grid is not None else fastlio_grid
         if grid_msg is not None:
             settings = self._store.get("slam")
             if settings.prior_map.show:
