@@ -29,7 +29,8 @@ class FramesSettings:
 @dataclass
 class CloudSettings:
     style: str = "points"            # points | square | spheres
-    size: float = 2.0
+    size_pixels: float = 1.0         # px 모드 사이즈
+    size_meters: float = 0.01        # meter 모드 사이즈
     size_unit: str = "meters"        # pixels | meters
     alpha: float = 1.0
     decay_seconds: float = 30.0      # 0.0 disables decay (accumulate forever, capped by HARD_MAX)
@@ -37,6 +38,10 @@ class CloudSettings:
     flat_color: str = "#4fc3f7"
     color_min: float = 0.0
     color_max: float = 10.0
+
+    @property
+    def active_size(self) -> float:
+        return self.size_meters if self.size_unit == "meters" else self.size_pixels
 
 
 @dataclass
@@ -89,7 +94,27 @@ def _filter_known(cls, data: dict[str, Any]) -> dict[str, Any]:
 
 def settings_from_dict(d: dict[str, Any]) -> PageDisplaySettings:
     frames = FramesSettings(**_filter_known(FramesSettings, d.get("frames", {})))
-    cloud = CloudSettings(**_filter_known(CloudSettings, d.get("cloud", {})))
+
+    cloud_raw = d.get("cloud", {})
+    if not isinstance(cloud_raw, dict):
+        cloud_raw = {}
+    # Legacy migration: pre-0.8 had a single `size` field whose meaning
+    # depended on `size_unit`. Map it to whichever side of the new split
+    # was active; leave the other side at its default. New keys win if
+    # both are present.
+    if (
+        "size" in cloud_raw
+        and "size_pixels" not in cloud_raw
+        and "size_meters" not in cloud_raw
+    ):
+        legacy_size = cloud_raw.pop("size")
+        unit = cloud_raw.get("size_unit", _DEFAULTS.cloud.size_unit)
+        if unit == "meters":
+            cloud_raw["size_meters"] = legacy_size
+        else:
+            cloud_raw["size_pixels"] = legacy_size
+    cloud = CloudSettings(**_filter_known(CloudSettings, cloud_raw))
+
     prior_map = PriorMapSettings(
         **_filter_known(PriorMapSettings, d.get("prior_map", {})))
     image_dict = d.get("image", {})
@@ -150,24 +175,6 @@ from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 
 DEFAULT_PATH = Path.home() / ".config" / "pkrc_visualizer" / "display_settings.yaml"
 
-# Atomic cross-field guard: when size_unit flips, the stale size value
-# from the previous unit might be 6 orders of magnitude off in the new
-# one (e.g. 10 px -> 10 m splat radius). Without clamping inside the
-# same store transaction, the panel-side debounce delivers the
-# size_unit change first and the view briefly paints a giant splat
-# that freezes the GPU before the size update arrives.
-SIZE_UNIT_THRESHOLD = 1.0
-SAFE_SIZE_FOR_PIXELS = 2.0
-SAFE_SIZE_FOR_METERS = 0.05
-
-
-def _safe_size_for_unit(unit: str, current: float) -> float:
-    if unit == "meters" and current > SIZE_UNIT_THRESHOLD:
-        return SAFE_SIZE_FOR_METERS
-    if unit == "pixels" and current < SIZE_UNIT_THRESHOLD:
-        return SAFE_SIZE_FOR_PIXELS
-    return current
-
 
 class DisplaySettingsStore(QObject):
     """Qt-aware in-memory settings cache with debounced YAML persistence."""
@@ -196,8 +203,6 @@ class DisplaySettingsStore(QObject):
         if not hasattr(obj, last):
             raise KeyError(f"unknown setting: {page_key}.{path}")
         setattr(obj, last, value)
-        if path == "cloud.size_unit":
-            page.cloud.size = _safe_size_for_unit(value, page.cloud.size)
         self.changed.emit(page_key, page)
         self._save_timer.start()
 

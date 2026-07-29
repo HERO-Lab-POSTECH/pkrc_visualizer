@@ -39,7 +39,7 @@ def test_apply_cloud_updates_point_size_and_alpha(view):
     # GetPointSize is a vtkPolyDataMapper property; force pixels so the
     # mapper-swap helper does not replace it with vtkPointGaussianMapper.
     s = PageDisplaySettings(cloud=CloudSettings(
-        size=7.0, alpha=0.5, size_unit="pixels"))
+        size_pixels=7.0, alpha=0.5, size_unit="pixels"))
     view.apply_display_settings(s)
     assert view._cloud_actor.GetProperty().GetPointSize() == 7.0
     assert view._accum_actor.GetProperty().GetPointSize() == 7.0
@@ -86,7 +86,7 @@ def test_meters_mode_attaches_style_specific_splat_shader(view):
     ]
     for style, signature in cases:
         s = PageDisplaySettings(cloud=CloudSettings(
-            size_unit="meters", style=style, size=0.05))
+            size_unit="meters", style=style, size_meters=0.05))
         view.apply_display_settings(s)
         mapper = view._cloud_actor.GetMapper()
         assert isinstance(mapper, vtk.vtkPointGaussianMapper)
@@ -122,3 +122,24 @@ def test_apply_background_updates_renderer(view):
     view.apply_display_settings(s)
     rgb = view._plotter.renderer.GetBackground()
     assert pytest.approx(rgb[0], abs=0.01) == 0xab / 255.0
+
+
+def test_active_size_routes_per_unit_to_mapper(qtbot):
+    """meters: SetScaleFactor=size_meters, pixels: SetPointSize=size_pixels."""
+    import vtk
+    from pkrc_visualizer.display_settings import PageDisplaySettings
+    from pkrc_visualizer.widgets.pyvista_view import PyVistaView
+    view = PyVistaView()
+    qtbot.addWidget(view)
+
+    s = PageDisplaySettings()
+    s.cloud.size_unit = "meters"
+    s.cloud.size_meters = 0.07
+    s.cloud.size_pixels = 9.0
+    view.apply_display_settings(s)
+    assert isinstance(view._cloud_actor.GetMapper(), vtk.vtkPointGaussianMapper)
+    assert view._cloud_actor.GetMapper().GetScaleFactor() == 0.07
+
+    s.cloud.size_unit = "pixels"
+    view.apply_display_settings(s)
+    assert view._cloud_actor.GetProperty().GetPointSize() == 9.0

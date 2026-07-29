@@ -17,7 +17,7 @@ def test_frames_schema_covers_all_dataclass_fields():
 
 
 def test_cloud_schema_with_decay():
-    paths = {f.path for f in cloud_schema(include_decay=True)}
+    paths = {f.path for f in cloud_schema(include_decay=True, size_unit="pixels")}
     assert "cloud.decay_seconds" in paths
     assert "cloud.style" in paths
     assert "cloud.size_unit" in paths
@@ -25,17 +25,17 @@ def test_cloud_schema_with_decay():
 
 
 def test_cloud_schema_without_decay():
-    paths = {f.path for f in cloud_schema(include_decay=False)}
+    paths = {f.path for f in cloud_schema(include_decay=False, size_unit="pixels")}
     assert "cloud.decay_seconds" not in paths
     # size_unit stays in even when decay is disabled.
     assert "cloud.size_unit" in paths
 
 
-def test_cloud_size_allows_sub_meter_resolution():
+def test_cloud_size_meters_uses_sub_meter_resolution():
     # meters mode (vtkPointGaussianMapper.SetScaleFactor in world units)
-    # needs sub-1.0 splat sizes; pixels mode can stay at integer steps.
-    spec = next(f for f in cloud_schema(include_decay=True)
-                if f.path == "cloud.size")
+    # needs sub-1.0 splat sizes.
+    spec = next(f for f in cloud_schema(include_decay=True, size_unit="meters")
+                if f.path == "cloud.size_meters")
     assert spec.options["min"] <= 0.01
     assert spec.options["step"] <= 0.1
 
@@ -48,7 +48,7 @@ def test_background_schema():
 
 
 def test_panel_tabs_returns_three_groups():
-    tabs = panel_tabs(include_decay=True)
+    tabs = panel_tabs(include_decay=True, size_unit="pixels")
     ids = [t[0] for t in tabs]
     assert ids == ["frames", "cloud", "background"]
 
@@ -61,11 +61,11 @@ from pkrc_visualizer.widgets.settings_panel import SettingsPanel
 from pkrc_visualizer.display_settings import PageDisplaySettings
 
 
-def _make_panel(qtbot, include_decay=True):
+def _make_panel(qtbot, include_decay=True, size_unit="pixels"):
     parent = QWidget()
     parent.resize(800, 600)
     qtbot.addWidget(parent)
-    panel = SettingsPanel(panel_tabs(include_decay), parent=parent)
+    panel = SettingsPanel(panel_tabs(include_decay, size_unit), parent=parent)
     return parent, panel
 
 
@@ -84,25 +84,25 @@ def test_panel_omits_decay_when_disabled(qtbot):
 
 
 def test_apply_values_syncs_widget_state(qtbot):
-    _, panel = _make_panel(qtbot)
+    _, panel = _make_panel(qtbot, size_unit="pixels")
     page = PageDisplaySettings()
-    page.cloud.size = 7.0
+    page.cloud.size_pixels = 7.0
     page.frames.show_map_frame = False
     panel.apply_values(page)
-    assert panel._widgets["cloud.size"].value() == 7.0
+    assert panel._widgets["cloud.size_pixels"].value() == 7.0
     assert panel._widgets["frames.show_map_frame"].isChecked() is False
 
 
 def test_slider_change_emits_debounced_signal(qtbot):
-    _, panel = _make_panel(qtbot)
+    _, panel = _make_panel(qtbot, size_unit="pixels")
     spy = QSignalSpy(panel.field_changed)
-    panel._widgets["cloud.size"].setValue(10.0)
-    panel._widgets["cloud.size"].setValue(11.0)
-    panel._widgets["cloud.size"].setValue(12.0)
+    panel._widgets["cloud.size_pixels"].setValue(10.0)
+    panel._widgets["cloud.size_pixels"].setValue(11.0)
+    panel._widgets["cloud.size_pixels"].setValue(12.0)
     qtbot.wait(260)  # > DEBOUNCE_MS (200)
     assert len(spy) == 1            # PyQt5 5.15: use len(spy), not spy.count()
     path, value = spy[0]
-    assert path == "cloud.size"
+    assert path == "cloud.size_pixels"
     assert value == 12.0
 
 
@@ -113,36 +113,6 @@ def test_reset_button_emits_current_tab(qtbot):
     panel._reset_button.click()
     assert len(spy) == 1
     assert spy[0][0] == "cloud"
-
-
-def test_size_unit_toggle_clamps_oversized_meters(qtbot):
-    """pixel-mode value > 1.0 must drop to a sane meters default on switch."""
-    _, panel = _make_panel(qtbot)
-    panel._widgets["cloud.size_unit"].setCurrentText("pixels")
-    panel._widgets["cloud.size"].setValue(10.0)            # pixels-mode value
-    panel._widgets["cloud.size_unit"].setCurrentText("meters")
-    assert panel._widgets["cloud.size"].value() == 0.05
-
-
-def test_size_unit_toggle_clamps_undersized_pixels(qtbot):
-    """meters-mode value < 1.0 must rise to a visible pixels default."""
-    _, panel = _make_panel(qtbot)
-    # default combobox index is the first choice ("pixels"); flip to
-    # "meters" first so the subsequent change to "pixels" actually fires
-    # currentTextChanged.
-    panel._widgets["cloud.size_unit"].setCurrentText("meters")
-    panel._widgets["cloud.size"].setValue(0.05)            # meters-mode value
-    panel._widgets["cloud.size_unit"].setCurrentText("pixels")
-    assert panel._widgets["cloud.size"].value() == 2.0
-
-
-def test_size_unit_toggle_keeps_safe_value(qtbot):
-    """A value already on the right side of the threshold must not move."""
-    _, panel = _make_panel(qtbot)
-    panel._widgets["cloud.size_unit"].setCurrentText("pixels")
-    panel._widgets["cloud.size"].setValue(0.5)             # already <= threshold
-    panel._widgets["cloud.size_unit"].setCurrentText("meters")
-    assert panel._widgets["cloud.size"].value() == 0.5
 
 
 def test_toggle_shows_and_hides(qtbot):
@@ -200,13 +170,44 @@ def test_prior_map_schema_present_when_decay_included():
 
 def test_panel_tabs_includes_prior_map_when_decay_included():
     from pkrc_visualizer.widgets.settings_schema import panel_tabs
-    tabs = panel_tabs(include_decay=True, include_prior_map=True)
+    tabs = panel_tabs(include_decay=True, size_unit="pixels", include_prior_map=True)
     ids = [t[0] for t in tabs]
     assert "prior_map" in ids
 
 
 def test_panel_tabs_omits_prior_map_when_disabled():
     from pkrc_visualizer.widgets.settings_schema import panel_tabs
-    tabs = panel_tabs(include_decay=True, include_prior_map=False)
+    tabs = panel_tabs(include_decay=True, size_unit="pixels", include_prior_map=False)
     ids = [t[0] for t in tabs]
     assert "prior_map" not in ids
+
+
+def test_size_unit_toggle_swaps_active_slider(qtbot):
+    from pkrc_visualizer.widgets.settings_schema import panel_tabs
+    panel = SettingsPanel(panel_tabs(include_decay=True, size_unit="pixels"))
+    qtbot.addWidget(panel)
+    # 처음에는 pixels 슬라이더가 노출
+    assert "cloud.size_pixels" in panel._widgets
+    assert "cloud.size_meters" not in panel._widgets
+    # meters로 전환
+    panel.rebuild_cloud_tab("meters")
+    assert "cloud.size_meters" in panel._widgets
+    assert "cloud.size_pixels" not in panel._widgets
+
+
+def test_size_unit_toggle_is_lossless(qtbot):
+    """px=10 설정 → meters 전환 → pixels 복귀 시 슬라이더 값 10 유지."""
+    from pkrc_visualizer.widgets.settings_schema import panel_tabs
+    panel = SettingsPanel(panel_tabs(include_decay=True, size_unit="pixels"))
+    qtbot.addWidget(panel)
+    panel._widgets["cloud.size_pixels"].setValue(10.0)
+    page = PageDisplaySettings()
+    page.cloud.size_pixels = 10.0
+    page.cloud.size_unit = "meters"
+    panel.rebuild_cloud_tab("meters")
+    panel.apply_values(page)
+    assert panel._widgets["cloud.size_meters"].value() == page.cloud.size_meters
+    page.cloud.size_unit = "pixels"
+    panel.rebuild_cloud_tab("pixels")
+    panel.apply_values(page)
+    assert panel._widgets["cloud.size_pixels"].value() == 10.0
